@@ -1,0 +1,172 @@
+﻿"""Load the curated sample dataset into the database.
+
+Used by ``marketsignal run --use-sample-dataset`` so the demo can run
+without any API keys and without hitting the public internet.
+"""
+from __future__ import annotations
+
+import datetime as _dt
+import json
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
+
+from marketsignal.db.session import get_session
+from marketsignal.models.base import new_id
+from marketsignal.models.company import Company
+from marketsignal.models.crawl_run import CrawlRun
+from marketsignal.models.event import Event
+from marketsignal.models.normalized_document import NormalizedDocument
+from marketsignal.models.raw_document import RawDocument
+from marketsignal.models.signal import Signal
+from marketsignal.models.source import Source
+
+SAMPLE_DIR = Path("data/sample_dataset")
+EVENTS_FILE = SAMPLE_DIR / "events.json"
+SIGNALS_FILE = SAMPLE_DIR / "signals.json"
+PLACEHOLDER_RAW_ID = "sample-raw"
+
+
+def _load_json(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise FileNotFoundError(f"sample dataset missing: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def ensure_company(s, name: str, website: str = "", description: str = "") -> Company:
+    row = s.query(Company).filter(Company.name == name).first()
+    if row is None:
+        row = Company(id=new_id(), name=name, website=website, description=description)
+        s.add(row)
+        s.flush()
+    return row
+
+
+def load_sample_dataset(*, target_name: str = "Dify") -> str:
+    """Insert the curated sample events and signals. Returns the new ``run_id``."""
+    events = _load_json(EVENTS_FILE)
+    signals = _load_json(SIGNALS_FILE)
+    now = _dt.datetime.utcnow()
+    run_id = new_id()
+    with get_session() as s:
+        run = CrawlRun(
+            id=run_id,
+            started_at=now,
+            status="running",
+            triggered_by="sample",
+            time_window_start=now - _dt.timedelta(days=7),
+            time_window_end=now,
+        )
+        s.add(run)
+
+        target = ensure_company(s, target_name, "https://dify.ai", "Open-source LLM app development platform")
+        company_by_name: dict[str, Company] = {target.name: target}
+        for ev in events:
+            if ev["company_name"] not in company_by_name:
+                c = ensure_company(s, ev["company_name"], website=f"https://{ev['company_name'].lower()}.test")
+                company_by_name[ev["company_name"]] = c
+        for sig in signals:
+            if sig["company_name"] not in company_by_name:
+                c = ensure_company(s, sig["company_name"])
+                company_by_name[sig["company_name"]] = c
+        s.flush()
+
+        for ev in events:
+            company = company_by_name[ev["company_name"]]
+            existing = s.query(Source).filter_by(company_id=company.id, url=ev["source_url"]).first()
+            if existing is None:
+                s.add(
+                    Source(
+                        id=new_id(),
+                        company_id=company.id,
+                        source_type="changelog",
+                        url=ev["source_url"],
+                    )
+                )
+        s.flush()
+
+        first_source = s.query(Source).first()
+        if s.get(RawDocument, PLACEHOLDER_RAW_ID) is None and first_source is not None:
+            s.add(
+                RawDocument(
+                    id=PLACEHOLDER_RAW_ID,
+                    crawl_run_id=run_id,
+                    source_id=first_source.id,
+                    url="sample://placeholder",
+                    http_status=200,
+                    fetched_at=now,
+                    content_type="text/plain",
+                    raw_html_path=None,
+                    raw_text_path=None,
+                    checksum="sample-checksum",
+                )
+            )
+            s.flush()
+
+        norm_by_index: dict[int, NormalizedDocument] = {}
+        for i, ev in enumerate(events):
+            company = company_by_name[ev["company_name"]]
+            nd = NormalizedDocument(
+                id=new_id(),
+                raw_document_id=PLACEHOLDER_RAW_ID,
+                company_id=company.id,
+                source_type="changelog",
+                title=ev["title"][:512],
+                clean_text="\n".join([ev["title"], ev["summary"], *ev.get("evidence_spans", [])]),
+                language="en",
+                published_at=_dt.datetime.fromisoformat(ev["published_at"]) if ev.get("published_at") else None,
+                canonical_url=ev["source_url"],
+                content_hash=f"sample-{i:03d}",
+                dedup_group=None,
+                category="sample",
+                confidence=1.0,
+            )
+            s.add(nd)
+            s.flush()
+            norm_by_index[i] = nd
+
+        for i, ev in enumerate(events):
+            company = company_by_name[ev["company_name"]]
+            nd = norm_by_index[i]
+            s.add(
+                Event(
+                    id=new_id(),
+                    document_id=nd.id,
+                    company_id=company.id,
+                    event_type=ev["event_type"],
+                    title=ev["title"][:512],
+                    summary=ev["summary"],
+                    published_at=_dt.datetime.fromisoformat(ev["published_at"]) if ev.get("published_at") else None,
+                    confidence=0.9,
+                    evidence_json=json.dumps(ev.get("evidence_spans", []), ensure_ascii=False),
+                )
+            )
+
+        for sig in signals:
+            company = company_by_name[sig["company_name"]]
+            doc_ids = [
+                norm_by_index[i].id
+                for i in sig.get("source_event_indices", [])
+                if i in norm_by_index
+            ]
+            s.add(
+                Signal(
+                    id=new_id(),
+                    crawl_run_id=run_id,
+                    company_id=company.id,
+                    signal_type=sig["signal_type"],
+                    finding=sig["finding"],
+                    analysis=sig.get("analysis", ""),
+                    recommendation=sig.get("recommendation", ""),
+                    confidence=sig.get("confidence", "medium"),
+                    supporting_event_ids_json=json.dumps([]),
+                    supporting_document_ids_json=json.dumps(doc_ids),
+                )
+            )
+    logger.info("sample dataset loaded: run_id={} events={} signals={}", run_id, len(events), len(signals))
+    return run_id
+
+
+__all__ = ["load_sample_dataset", "SAMPLE_DIR", "EVENTS_FILE", "SIGNALS_FILE"]
+

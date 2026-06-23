@@ -1,0 +1,25 @@
+﻿"""LangGraph state definitions."""
+from __future__ import annotations
+
+from typing import TypedDict
+
+
+class GraphState(TypedDict, total=False):
+    """Mutable state carried between pipeline nodes."""
+
+    run_id: str
+    target_company: str
+    competitor_ids: list[str]
+    source_ids: list[str]
+    time_window_start: str
+    time_window_end: str
+
+    raw_document_ids: list[str]
+    normalized_document_ids: list[str]
+    event_ids: list[str]
+    signal_ids: list[str]
+    report_ids: list[str]
+
+    warnings: list[str]
+    metrics: dict[str, float]
+    status: str

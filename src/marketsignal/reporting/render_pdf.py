@@ -1,0 +1,112 @@
+"""Render Markdown reports as PDF (using optional fpdf2 dep).
+
+The PDF renderer is intentionally simple: a single-column document with
+configurable title, page size, and basic markdown rendering (headings, bold,
+bullets, tables). It does NOT depend on weasyprint or wkhtmltopdf, so it
+works on a fresh dev machine with no system-level dependencies.
+
+Install with: ``pip install marketsignal-agent[pdf]``
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def markdown_to_pdf(
+    md_text: str,
+    out_path: str | Path,
+    *,
+    title: str = "MarketSignal Report",
+    author: str = "MarketSignal Agent",
+) -> Path:
+    """Convert a Markdown string to a PDF file and return the output path.
+
+    Args:
+        md_text: The full Markdown body.
+        out_path: Where to write the PDF.
+        title: PDF document title.
+        author: PDF metadata author.
+
+    Returns:
+        The resolved :class:`Path` of the written PDF.
+
+    Raises:
+        ImportError: If ``fpdf2`` is not installed.
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError as exc:
+        raise ImportError(
+            "PDF rendering requires fpdf2. Install with `pip install marketsignal-agent[pdf]`"
+        ) from exc
+
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_title(title)
+    pdf.set_author(author)
+    pdf.add_page()
+    # Use a Unicode TTF font if available (fpdf2 ships with one)
+    try:
+        pdf.set_font("Helvetica", size=11)
+    except Exception:  # noqa: BLE001
+        pdf.set_font("Arial", size=11)
+
+    in_code = False
+    for raw_line in md_text.splitlines():
+        line = raw_line.rstrip()
+        if line.startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code:
+            pdf.set_font("Courier", size=9)
+            pdf.cell(0, 5, txt=line, ln=1)
+            pdf.set_font("Helvetica", size=11)
+            continue
+        # Headings
+        if line.startswith("# "):
+            pdf.set_font("Helvetica", style="B", size=18)
+            pdf.cell(0, 10, txt=line[2:], ln=1)
+            pdf.ln(2)
+            pdf.set_font("Helvetica", size=11)
+        elif line.startswith("## "):
+            pdf.set_font("Helvetica", style="B", size=14)
+            pdf.cell(0, 8, txt=line[3:], ln=1)
+            pdf.ln(1)
+            pdf.set_font("Helvetica", size=11)
+        elif line.startswith("### "):
+            pdf.set_font("Helvetica", style="B", size=12)
+            pdf.cell(0, 7, txt=line[4:], ln=1)
+            pdf.set_font("Helvetica", size=11)
+        elif line.startswith("- "):
+            pdf.cell(0, 6, txt="  - " + line[2:], ln=1)
+        elif line.startswith("|"):
+            # Markdown table -> render as a tab-separated row
+            pdf.set_font("Courier", size=9)
+            pdf.multi_cell(0, 5, txt=line)
+            pdf.set_font("Helvetica", size=11)
+        elif line.startswith("**") and line.endswith("**") and len(line) > 4:
+            pdf.set_font("Helvetica", style="B", size=11)
+            pdf.cell(0, 6, txt=line.strip("*"), ln=1)
+            pdf.set_font("Helvetica", size=11)
+        elif line.strip():
+            pdf.multi_cell(0, 6, txt=line)
+        else:
+            pdf.ln(2)
+
+    pdf.output(str(out))
+    return out
+
+
+def render_report_to_pdf(md_path: str | Path, pdf_path: str | Path | None = None) -> Path:
+    """Convenience: read a Markdown file and write a sibling PDF."""
+    src = Path(md_path)
+    out = Path(pdf_path) if pdf_path else src.with_suffix(".pdf")
+    body = src.read_text(encoding="utf-8", errors="ignore")
+    title = src.stem.replace("_", " ").title()
+    return markdown_to_pdf(body, out, title=title)
+
+
+__all__ = ["markdown_to_pdf", "render_report_to_pdf"]

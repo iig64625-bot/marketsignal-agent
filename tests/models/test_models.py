@@ -1,0 +1,154 @@
+﻿"""Tests for ORM model schema and basic CRUD.
+
+The fixture ``tmp_data_dir`` (defined in ``conftest.py``) sets
+``DATABASE_URL`` to a temporary SQLite file so the production DB is
+never touched.
+"""
+
+from __future__ import annotations
+
+import datetime as _dt
+
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from marketsignal.db.engine import get_engine
+from marketsignal.db.session import _get_factory, get_session, reset_session_factory
+from marketsignal.models import (
+    Base,
+    Company,
+    CrawlRun,
+    Signal,
+    Source,
+    new_id,
+)
+
+
+def _dispose_all() -> None:
+    """Dispose every engine reference (factory-bound + cache) to release SQLite locks."""
+    factory = _get_factory()
+    if factory is not None and factory.kw.get("bind") is not None:
+        factory.kw["bind"].dispose()
+    get_engine().dispose()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_db(tmp_data_dir):
+    """Build a clean schema for every test and dispose the engine on teardown."""
+    reset_session_factory()
+    eng = get_engine()
+    Base.metadata.drop_all(eng)
+    Base.metadata.create_all(eng)
+    try:
+        yield
+    finally:
+        # Dispose both the setup engine and the factory-bound engine so the
+        # SQLite file handle is released before ``tempfile`` cleans up.
+        _dispose_all()
+        reset_session_factory()
+
+
+def _new_company(name: str = "Acme") -> Company:
+    return Company(id=new_id(), name=name, website="https://acme.test", description="d")
+
+
+def test_new_id_is_12_hex():
+    """``new_id`` produces 12 lowercase hex characters and is unique per call."""
+    a, b = new_id(), new_id()
+    assert len(a) == 12
+    assert a != b
+    int(a, 16)
+    int(b, 16)
+
+
+def test_create_all_tables_succeeds():
+    """All twelve business tables should exist after metadata create_all."""
+    from sqlalchemy import inspect
+
+    names = set(inspect(get_engine()).get_table_names())
+    expected = {
+        "companies",
+        "sources",
+        "crawl_runs",
+        "raw_documents",
+        "normalized_documents",
+        "document_chunks",
+        "events",
+        "signals",
+        "reports",
+        "claims",
+        "citations",
+        "eval_runs",
+    }
+    assert expected.issubset(names)
+
+
+def test_company_round_trip():
+    """Inserting a Company and re-reading it returns the same fields."""
+    company = _new_company("Dify")
+    with get_session() as s:
+        s.add(company)
+    with get_session() as s:
+        got = s.get(Company, company.id)
+        assert got is not None
+        assert got.name == "Dify"
+        assert got.website == "https://acme.test"
+
+
+def test_source_cascade_delete():
+    """Removing a Company cascades to its Source rows (SQLite FK enforced)."""
+    company = _new_company("Coze")
+    src = Source(id=new_id(), company_id=company.id, source_type="changelog", url="https://x")
+    with get_session() as s:
+        s.add(company)
+        s.add(src)
+    with get_session() as s:
+        loaded = s.get(Company, company.id)
+        assert loaded is not None
+        s.delete(loaded)
+    with get_session() as s:
+        assert s.get(Source, src.id) is None
+
+
+def test_crawl_run_defaults_persist():
+    """A newly-inserted CrawlRun has status='pending' and triggered_by='cli'."""
+    run = CrawlRun(id=new_id(), started_at=_dt.datetime.utcnow())
+    with get_session() as s:
+        s.add(run)
+    with get_session() as s:
+        got = s.get(CrawlRun, run.id)
+        assert got is not None
+        assert got.status == "pending"
+        assert got.triggered_by == "cli"
+
+
+def test_signal_default_json_blobs():
+    """JSON-blob fields default to empty JSON arrays after insert."""
+    company = _new_company("Coze")
+    run = CrawlRun(id=new_id(), started_at=_dt.datetime.utcnow())
+    with get_session() as sess:
+        sess.add(company)
+        sess.add(run)
+    s = Signal(
+        id=new_id(),
+        crawl_run_id=run.id,
+        company_id=company.id,
+        signal_type="product_update",
+    )
+    with get_session() as sess:
+        sess.add(s)
+    with get_session() as sess:
+        got = sess.get(Signal, s.id)
+        assert got is not None
+        assert got.supporting_event_ids_json == "[]"
+        assert got.supporting_document_ids_json == "[]"
+        assert got.confidence == "medium"
+
+
+def test_unique_company_name():
+    """Reusing a name violates the unique index on ``companies.name``."""
+    with get_session() as s:
+        s.add(_new_company("Dify"))
+    with pytest.raises(IntegrityError):
+        with get_session() as s:
+            s.add(_new_company("Dify"))

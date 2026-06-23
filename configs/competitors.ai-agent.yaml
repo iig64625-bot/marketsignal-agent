@@ -1,0 +1,46 @@
+# ==========================================
+# MarketSignal Agent - Competitor Configuration
+# Target: AI Agent Platforms (Dify / Coze / FastGPT)
+# ==========================================
+
+target_company:
+  name: "Dify"
+  website: "https://dify.ai"
+  description: "Open-source LLM app development platform"
+
+competitors:
+  - name: "Coze"
+    website: "https://www.coze.com"
+    sources:
+      - type: changelog
+        url: "https://www.coze.com/changelog"
+      - type: website
+        url: "https://www.coze.com"
+      - type: jobs
+        url: "https://www.coze.com/careers"
+      - type: github
+        url: "https://github.com/bytedance/coze"
+
+  - name: "FastGPT"
+    website: "https://fastgpt.in"
+    sources:
+      - type: website
+        url: "https://fastgpt.in"
+      - type: github
+        url: "https://github.com/labring/FastGPT"
+      - type: docs
+        url: "https://doc.tryfastgpt.ai"
+
+monitoring_dimensions:
+  - product_update
+  - pricing
+  - hiring
+  - user_feedback
+  - github_release
+
+run_options:
+  time_window_days: 7
+  use_sample_dataset: false
+  generate_weekly_report: true
+  generate_battlecards: true
+  run_evals: true

@@ -1,0 +1,55 @@
+﻿"""Tests for the webpage fetcher (mocked HTTP)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+
+from marketsignal.ingestion.fetch_webpage import fetch_webpage
+
+
+def _make_response(url: str, body: bytes, content_type: str = "text/html") -> httpx.Response:
+    return httpx.Response(
+        200,
+        content=body,
+        headers={"content-type": content_type},
+        request=httpx.Request("GET", url),
+    )
+
+
+@pytest.mark.asyncio
+async def test_fetch_webpage_persists_raw_html(tmp_path):
+    body = b"<html><body>hi</body></html>"
+    with patch("marketsignal.ingestion.fetch_webpage.HttpClient") as ClientMock:
+        instance = ClientMock.return_value
+        instance.__aenter__ = AsyncMock(return_value=instance)  # type: ignore[method-assign]
+        instance.__aexit__ = AsyncMock(return_value=False)  # type: ignore[method-assign]
+        instance.fetch = AsyncMock(return_value=_make_response("https://x.test", body))  # type: ignore[method-assign]
+        doc = await fetch_webpage("https://x.test", source_id="src1", crawl_run_id="run1", raw_root=tmp_path)
+    assert doc.http_status == 200
+    assert doc.source_id == "src1"
+    assert doc.crawl_run_id == "run1"
+    assert doc.raw_html_path is not None
+    assert Path(doc.raw_html_path).read_bytes() == body
+    assert doc.checksum is not None and len(doc.checksum) == 64
+
+
+@pytest.mark.asyncio
+async def test_fetch_webpage_uses_external_client():
+    """If a client is passed in, the fetcher does not create a new one."""
+    body = b"<html></html>"
+    response = _make_response("https://y.test", body)
+    fake_client = AsyncMock()
+    fake_client.fetch = AsyncMock(return_value=response)  # type: ignore[method-assign]
+    doc = await fetch_webpage(
+        "https://y.test",
+        source_id="s2",
+        crawl_run_id="r2",
+        client=fake_client,
+    )
+    assert doc.source_id == "s2"
+    assert doc.crawl_run_id == "r2"
+    fake_client.fetch.assert_awaited_once_with("https://y.test")

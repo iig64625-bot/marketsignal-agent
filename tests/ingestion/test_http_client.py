@@ -1,0 +1,59 @@
+﻿"""Tests for the async HTTP client (mocked transport)."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, patch
+
+import httpx
+import pytest
+
+from marketsignal.ingestion.http_client import FetchError, HttpClient, checksum_bytes
+
+
+def test_checksum_bytes_is_sha256_hex():
+    """``checksum_bytes`` returns 64 lowercase hex characters (SHA-256)."""
+    h = checksum_bytes(b"hello")
+    assert len(h) == 64
+    int(h, 16)
+
+
+@pytest.mark.asyncio
+async def test_fetch_returns_response_on_success():
+    """A successful transport returns the response as-is."""
+    fake = httpx.Response(200, content=b"ok", request=httpx.Request("GET", "https://x"))
+    async with HttpClient() as client:
+        with patch.object(client, "_pace", new=AsyncMock()):
+            with patch.object(client._client, "get", new=AsyncMock(return_value=fake)):
+                resp = await client.fetch("https://x")
+                assert resp.status_code == 200
+                assert resp.content == b"ok"
+
+
+@pytest.mark.asyncio
+async def test_fetch_retries_on_transient_error():
+    """A transport error triggers tenacity retries, then succeeds."""
+    fake = httpx.Response(200, content=b"ok", request=httpx.Request("GET", "https://x"))
+    call_count = {"n": 0}
+
+    async def fake_get(url):
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            raise httpx.ConnectError("boom")
+        return fake
+
+    async with HttpClient(max_retries=3) as client:
+        with patch.object(client, "_pace", new=AsyncMock()):
+            with patch.object(client._client, "get", new=fake_get):
+                resp = await client.fetch("https://x")
+                assert resp.status_code == 200
+                assert call_count["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_raises_after_exhausted_retries():
+    """All retries failing raises ``FetchError``."""
+    async with HttpClient(max_retries=2) as client:
+        with patch.object(client, "_pace", new=AsyncMock()):
+            with patch.object(client._client, "get", new=AsyncMock(side_effect=httpx.ConnectError("nope"))):
+                with pytest.raises(FetchError):
+                    await client.fetch("https://x")

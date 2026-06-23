@@ -1,0 +1,198 @@
+"""Cron-style scheduler for running the pipeline on a schedule.
+
+Uses :mod:`apscheduler` (BackgroundScheduler) so the CLI can stay in the
+foreground while jobs fire in the background. Jobs are persisted only in
+memory — restart the CLI to reload them from ``jobs.json``.
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from loguru import logger
+
+from marketsignal.agents.graph import build_pipeline
+from marketsignal.agents.state import GraphState
+
+JOBS_FILE = Path("data/scheduler/jobs.json")
+_scheduler: BackgroundScheduler | None = None
+
+
+@dataclass
+class JobInfo:
+    """Public view of a scheduled job."""
+
+    id: str
+    name: str
+    cron: str
+    config_path: str
+    use_sample_dataset: bool
+    next_run: str | None = None
+
+
+@dataclass
+class _JobState:
+    """In-memory state for a job (kept so we can serialize)."""
+
+    id: str
+    name: str
+    cron: str
+    config_path: str
+    use_sample_dataset: bool = False
+
+
+_state: dict[str, _JobState] = {}
+
+
+def _parse_cron(expr: str) -> dict[str, str]:
+    """Parse a 5-field cron expression into a dict for :class:`CronTrigger`."""
+    parts = expr.split()
+    if len(parts) != 5:
+        raise ValueError(f"cron expression must have 5 fields, got {len(parts)}: {expr!r}")
+    return {
+        "minute": parts[0],
+        "hour": parts[1],
+        "day": parts[2],
+        "month": parts[3],
+        "day_of_week": parts[4],
+    }
+
+
+def _run_job(job_id: str) -> None:
+    """Cron callback: run the configured pipeline once and log the result."""
+    state = _state.get(job_id)
+    if not state:
+        logger.warning("scheduler: job {} not found in state", job_id)
+        return
+    logger.info("scheduler: firing job={} config={}", job_id, state.config_path)
+    try:
+        pipeline = build_pipeline(use_sample_dataset=state.use_sample_dataset)
+        initial: GraphState = {
+            "target_company": "Dify",
+            "warnings": [],
+            "metrics": {},
+            "status": "pending",
+        }
+        result = asyncio.run(pipeline.ainvoke(initial))
+        logger.info(
+            "scheduler: job={} done status={} warnings={}",
+            job_id,
+            result.get("status"),
+            len(result.get("warnings") or []),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("scheduler: job={} failed: {}", job_id, exc)
+
+
+def _save_jobs() -> None:
+    """Persist the in-memory job state to ``data/scheduler/jobs.json``."""
+    JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = [asdict(s) for s in _state.values()]
+    JOBS_FILE.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _ensure_scheduler() -> BackgroundScheduler:
+    """Return the singleton :class:`BackgroundScheduler`, starting it if needed."""
+    global _scheduler
+    if _scheduler is None:
+        _scheduler = BackgroundScheduler(daemon=True)
+        _scheduler.start()
+        logger.info("scheduler started")
+    return _scheduler
+
+
+def add_job(
+    name: str,
+    cron: str,
+    config_path: str = "configs/competitors.ai-agent.yaml",
+    use_sample_dataset: bool = False,
+) -> JobInfo:
+    """Add a new cron job that runs the pipeline on the given schedule.
+
+    Args:
+        name: Human-friendly job name (also used as ID).
+        cron: 5-field cron expression (``minute hour day month day_of_week``).
+        config_path: Pipeline config to run.
+        use_sample_dataset: If True, use the bundled sample dataset.
+
+    Returns:
+        A :class:`JobInfo` describing the new job.
+    """
+    sched = _ensure_scheduler()
+    job_id = name.replace(" ", "_")
+    trigger = CronTrigger(**_parse_cron(cron))
+    sched.add_job(_run_job, trigger=trigger, id=job_id, args=[job_id], replace_existing=True)
+    _state[job_id] = _JobState(
+        id=job_id,
+        name=name,
+        cron=cron,
+        config_path=config_path,
+        use_sample_dataset=use_sample_dataset,
+    )
+    _save_jobs()
+    info = JobInfo(
+        id=job_id,
+        name=name,
+        cron=cron,
+        config_path=config_path,
+        use_sample_dataset=use_sample_dataset,
+        next_run=str(sched.get_job(job_id).next_run_time) if sched.get_job(job_id) else None,
+    )
+    logger.info("scheduler: added job={} cron={!r}", job_id, cron)
+    return info
+
+
+def remove_job(job_id: str) -> bool:
+    """Remove a job by ID. Returns True if removed."""
+    sched = _ensure_scheduler()
+    if job_id in _state:
+        try:
+            sched.remove_job(job_id)
+        except Exception:  # noqa: BLE001
+            pass
+        del _state[job_id]
+        _save_jobs()
+        return True
+    return False
+
+
+def list_jobs() -> list[JobInfo]:
+    """Return a snapshot of all currently-scheduled jobs."""
+    sched = _ensure_scheduler()
+    out: list[JobInfo] = []
+    for jid, st in _state.items():
+        job = sched.get_job(jid)
+        next_run = str(job.next_run_time) if job and job.next_run_time else None
+        out.append(
+            JobInfo(
+                id=st.id,
+                name=st.name,
+                cron=st.cron,
+                config_path=st.config_path,
+                use_sample_dataset=st.use_sample_dataset,
+                next_run=next_run,
+            )
+        )
+    return out
+
+
+def shutdown() -> None:
+    """Stop the scheduler and release its threads."""
+    global _scheduler
+    if _scheduler is not None:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
+        logger.info("scheduler shut down")
+
+
+__all__ = [
+    "JobInfo",
+    "add_job",
+    "remove_job",
+    "list_jobs",
+    "shutdown",
+]

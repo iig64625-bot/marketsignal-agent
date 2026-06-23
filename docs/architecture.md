@@ -1,0 +1,259 @@
+﻿# MarketSignal Agent — System Architecture
+
+> 本文是 `D:\新项目\PROJECT_PLAN.md` 中 Phase 10 / Task 10.1 的交付物，描述系统的分层结构、模块依赖、数据流和部署形态。
+
+## 1. 设计目标
+
+MarketSignal Agent 是一个面向产品/市场/销售团队的 **AI 竞品情报系统**。它的核心难点不是"用 LLM 生成文本"，而是：
+
+1. **数据真伪可控** — 每条结论必须能回溯到原始 URL，否则不可信
+2. **多源异构** — 官网 / Blog / Changelog / GitHub / 招聘页 / 定价页，每种源结构不同
+3. **过程可观测** — 哪一节点失败、哪个 claim 无引用，要能回放
+4. **离线可演示** — 面试现场不依赖外网也能完整跑一遍
+
+为此系统被刻意拆成 6 层 + 1 个评估闭环，每层只做一件事、可以独立测试。
+
+## 2. 总体架构图
+
+```mermaid
+flowchart TB
+    subgraph Config["Configuration"]
+        Y1[configs/competitors.*.yaml]
+        Y2[.env (LLM keys, DB URL)]
+    end
+
+    subgraph CLI["CLI Entry"]
+        C1[python -m marketsignal.cli]
+    end
+
+    subgraph Ingest["1. Ingestion"]
+        I1[fetch_webpage]
+        I2[fetch_rss]
+        I3[fetch_github]
+        I4[router (per source type)]
+    end
+
+    subgraph Norm["2. Normalization"]
+        N1[html_cleaner]
+        N2[content_extractor]
+        N3[deduper (content_hash)]
+    end
+
+    subgraph Event["3. Event Extraction"]
+        E1[extractor (LLM or rules)]
+    end
+
+    subgraph RAG["4. RAG Layer"]
+        R1[chunker]
+        R2[embedder]
+        R3[vector_store (Chroma)]
+        R4[retriever]
+    end
+
+    subgraph Agents["5. LangGraph Workflow"]
+        A1[load_config]
+        A2[collect_sources]
+        A3[normalize_documents]
+        A4[extract_events]
+        A5[index_documents]
+        A6[analyze_signals]
+        A7[generate_weekly_report]
+        A8[generate_battlecards]
+        A9[check_citations]
+        A10[run_evals]
+        A11[finalize]
+    end
+
+    subgraph Citation["6. Citation & Eval"]
+        CT1[citation/checker]
+        EV1[citation_coverage]
+        EV2[unsupported_claim_rate]
+        EV3[dedup_rate]
+        EV4[latency / token_cost]
+    end
+
+    subgraph DB["Storage"]
+        D1[(SQLite + Alembic)]
+    end
+
+    Y1 --> A1
+    Y2 --> A1
+    C1 --> Agents
+    I1 --> N1
+    I2 --> N1
+    I3 --> N1
+    I4 --> I1
+    I4 --> I2
+    I4 --> I3
+    N1 --> N2
+    N2 --> N3
+    N3 --> D1
+    D1 --> E1
+    E1 --> D1
+    D1 --> R1
+    R1 --> R2
+    R2 --> R3
+    R3 --> R4
+    R4 --> CT1
+    A1 --> A2
+    A2 --> I4
+    A2 --> A3
+    A3 --> Norm
+    A3 --> A4
+    A4 --> E1
+    A4 --> A5
+    A5 --> R1
+    A5 --> A6
+    A6 --> A7
+    A7 --> A8
+    A8 --> A9
+    A9 --> CT1
+    A9 --> A10
+    A10 --> EV1
+    A10 --> EV2
+    A10 --> EV3
+    A10 --> EV4
+    A10 --> A11
+    A11 --> D1
+    CT1 --> D1
+    A7 --> D1
+    A8 --> D1
+```
+
+## 3. 分层与模块依赖
+
+### Layer 1 — Ingestion（`src/marketsignal/ingestion/`）
+
+- `http_client.py`（104 行）— 统一超时、重试、UA、限速
+- `fetch_webpage.py` — 单 URL 抓取 + 元信息提取
+- `fetch_rss.py` — feedparser 解析订阅源
+- `fetch_github.py` — PyGithub 包装，处理 rate limit
+- `router.py` — 根据 `Source.source_type` 分发到具体 fetcher
+
+**关键设计**：所有 fetcher 返回 `RawDocument` 行而不返回字符串，方便后续节点用 ORM 关联。
+
+### Layer 2 — Normalization（`src/marketsignal/normalization/`）
+
+- `html_cleaner.py` — 去 script/style/广告
+- `content_extractor.py` — readability-lxml + trafilatura 双策略，按行长度选最长主文本
+- `deduper.py` — `content_hash` + `dedup_group` 双层去重
+
+**为什么放在 ingestion 之后、event 之前**：脏 HTML 会污染 LLM，去重要求可以做到 `company_id` + `content_hash` 级别。
+
+### Layer 3 — Event Extraction（`src/marketsignal/events/extractor.py`）
+
+- 接受 `NormalizedDocument`，返回结构化 `Event`（product_update / pricing / hiring / gtm / risk）
+- 优先用 LLM，缺 key 时降级到关键词 + 类型匹配（确定性 fallback）
+- 输出走 Pydantic `EventOutput` schema 强校验
+
+### Layer 4 — RAG（`src/marketsignal/rag/`）
+
+- `chunker.py` — sliding window 切分（默认 800 chars / 200 overlap）
+- `embedder.py` — OpenAI `text-embedding-3-small`，本地有 `chromadb` 时落到 `Chroma`
+- `vector_store.py` — 封装 Chroma，支持 metadata 过滤 `company_id / source_type / date`
+- `retriever.py` — `retrieve_evidence(query, n=3)`，返回 `(text, metadata.url)`
+
+**降级链路**：当 LLM key 缺失时，`vector_store.search` 返回空列表；`citation/checker` 立刻回退到 `NormalizedDocument` 表扫描 + 关键词重叠。
+
+### Layer 5 — LangGraph Workflow（`src/marketsignal/agents/`）
+
+`graph.py` 暴露 `build_pipeline(use_sample_dataset: bool)`，返回编译后的图。两条流水线：
+
+| 流水线 | 节点 | 触发条件 |
+|---|---|---|
+| **Full** | load_config → collect_sources → normalize_documents → extract_events → index_documents → analyze_signals → generate_weekly_report → generate_battlecards → check_citations → run_evals → finalize | 有真实 LLM key 且不传 `--use-sample-dataset` |
+| **Sample** | load_sample → generate_weekly_report → generate_battlecards → check_citations → run_evals → finalize | `--use-sample-dataset`（默认） |
+
+`state.py` 中的 `GraphState` 是 TypedDict，所有节点只读写这份共享状态。设计原则：**节点无副作用到外部**，所有持久化都用 session commit。
+
+`analyze_signals.py` 核心逻辑：按 `company_id` 分组事件，对每组调一次 LLM（`with_structured_output(SignalListOutput)`），要求返回 `signal_type / finding / analysis / recommendation / confidence` 五字段。
+
+### Layer 6 — Citation & Eval（`src/marketsignal/citation/` + `src/marketsignal/evals/`）
+
+**Citation Checker** 是这个项目最关键的"护栏"：
+- `_split_claims_from_markdown` 启发式切分 claim（20-400 字符，跳过表头和占位行）
+- 有 LLM → 让 LLM 判定 `is_supported` + 给出 supporting URLs
+- 无 LLM → `_deterministic_support` 做关键词重叠（阈值 `max(2, len(tokens)//3)`）
+- 结果写入 `Claim` + `Citation` 两张表
+
+**Eval 指标**（`evals/summary.py` + 5 个子模块）：
+| 指标 | 公式 | 目标 |
+|---|---|---|
+| `citation_coverage` | `supported / total_claims` | > 0.9（LLM 模式下） |
+| `unsupported_claim_rate` | `1 - coverage` | < 0.1 |
+| `dedup_rate` | `1 - unique / total_normalized_docs` | 越高越好 |
+| `avg_latency_ms` / `token_cost_usd` | 端到端耗时与成本 | 视模型而定 |
+
+每次运行落盘 `data/evals/eval_<run_id>.json` 与 `eval_runs` 表。
+
+## 4. 数据模型
+
+完整的 ER 图见 `docs/data-model.md`（Phase 10 扩展），此处列关键表：
+
+```
+companies ─< sources ─< raw_documents ─< normalized_documents
+                                              │
+                                              ├─< document_chunks (RAG)
+                                              │
+                                              └─< events ─< signals
+                                                                │
+                                                                └─< reports (weekly | battlecard)
+                                                                            │
+                                                                            └─< claims ─< citations
+```
+
+- `companies` — 目标公司 + 竞品，`name` 唯一
+- `crawl_runs` — 每次执行的根节点，串起所有行
+- `events.supporting_document_ids` / `signals.supporting_event_ids` 用 JSON 列存，避免过深的 JOIN
+- `claims` 与 `citations` 一对多，citation 留 `url + snippet + document_id (nullable)`，支持直接点击
+
+## 5. 数据流（一次完整 run 的生命周期）
+
+1. **load_config** — 读 `configs/competitors.*.yaml`，upsert `companies` / `sources` 行
+2. **collect_sources** — 调 `ingestion.router` 抓所有 `sources`，写入 `raw_documents`，`status=raw`
+3. **normalize_documents** — 对每个 `raw_document` 跑 clean → extract → dedupe，写 `normalized_documents`
+4. **extract_events** — 对每个 `normalized_document` 调 LLM/规则，写 `events`
+5. **index_documents** — 把 `normalized_documents.clean_text` 切块后写 Chroma（仅当 `OPENAI_API_KEY` 存在）
+6. **analyze_signals** — 按 `company_id` 分组事件 → LLM 写 `signals`
+7. **generate_weekly_report** — 渲染 `data/reports/weekly_<run_id>.md`，写 `reports (type=weekly)`
+8. **generate_battlecards** — 每个竞品一张，写 `reports (type=battlecard)`
+9. **check_citations** — 对每个 report 抽 claim → 校验 → 写 `claims` + `citations`
+10. **run_evals** — 计算 5 个指标 → 写 `eval_runs` + `data/evals/eval_<run_id>.json`
+11. **finalize** — 更新 `crawl_runs.status=completed`，打印汇总
+
+每一步都在 `GraphState` 里 push `warnings`，最后 `finalize` 节点一并 dump 到 `crawl_runs.error_message`（仅当 status=failed）。
+
+## 6. 离线可演示保障
+
+```mermaid
+flowchart LR
+    A[CLI --use-sample-dataset] --> B[load_sample_node]
+    B --> C[从 data/sample_dataset/<br/>events.json + signals.json<br/>直接写库]
+    C --> D[后续 report / citation / eval 节点完全一样]
+```
+
+`src/marketsignal/services/sample_loader.py` 把 9 条手写 events + 9 条手写 signals 灌进 DB，绕过 fetch / LLM / embedder。面试现场 0 网络、0 token 成本也能跑完。
+
+## 7. 配置与部署
+
+| 配置 | 文件 | 说明 |
+|---|---|---|
+| 竞品列表 | `configs/competitors.*.yaml` | 一份配置 = 一次完整 run |
+| LLM key | `.env` | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 二选一 |
+| DB URL | `.env` | 默认 `sqlite:///./data/marketsignal.db` |
+| 报告输出 | `MARKETSIGNAL_REPORT_DIR` 环境变量 | 默认 `data/reports` |
+
+**当前部署形态**：单进程 CLI，DB 是本地 SQLite。生产化只需把 SQLite 换成 Postgres + 把 `MARKETSIGNAL_DB_URL` 指过去，所有代码已经走 SQLAlchemy Core/ORM。
+
+## 8. 测试矩阵
+
+- `tests/ingestion/*` — fetcher 单测（mock HTTP）
+- `tests/normalization/*` — cleaner / deduper 单测
+- `tests/events/*` — extractor 单测（mock LLM）
+- `tests/rag/*` — chunker 单测
+- `tests/reporting/*` — markdown 模板渲染
+- `tests/citation/*` — checker 关键词重叠 + metrics
+- `tests/evals/*` — 5 个指标计算
+- `tests/agents/*` — 节点连接 + 状态结构
+
+总计 57 个测试，Windows + Python 3.10 全绿。

@@ -1,0 +1,53 @@
+# MarketSignal Agent - dev compose
+# Bring up API + UI + scheduler. Mount the local repo for hot-reload.
+# Usage: docker compose up
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: marketsignal-agent:dev
+    container_name: marketsignal-api
+    command: ["uvicorn", "marketsignal.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/marketsignal.db
+      CHROMA_PERSIST_DIR: /data/chroma
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+      - ./configs:/app/configs:ro
+    restart: unless-stopped
+
+  ui:
+    image: marketsignal-agent:dev
+    container_name: marketsignal-ui
+    command: ["streamlit", "run", "src/marketsignal/ui/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  scheduler:
+    image: marketsignal-agent:dev
+    container_name: marketsignal-scheduler
+    command: ["python", "-m", "marketsignal", "schedule", "--config", "configs/competitors.ai-agent.yaml", "--cron", "0 9 * * 1", "--name", "weekly-monday-9am"]
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/marketsignal.db
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./data:/data
+      - ./configs:/app/configs:ro
+    depends_on:
+      - api
+    restart: unless-stopped

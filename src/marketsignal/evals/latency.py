@@ -1,0 +1,41 @@
+"""Latency measurement helper (used as a decorator or context manager)."""
+from __future__ import annotations
+
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+
+@contextmanager
+def measure_latency() -> Iterator[dict[str, float]]:
+    """Yield a dict that receives the elapsed milliseconds under key ``elapsed_ms``."""
+    state: dict[str, float] = {}
+    start = time.perf_counter()
+    try:
+        yield state
+    finally:
+        state["elapsed_ms"] = (time.perf_counter() - start) * 1000.0
+
+
+
+def p50_p95_from_trace(run_id: str) -> dict[str, float]:
+    """Read ``data/traces/{run_id}.json`` and compute p50/p95 across node spans."""
+    from marketsignal.evals.eval_runner import percentile
+    from marketsignal.utils.tracing import TRACE_DIR
+    path = TRACE_DIR / f"{run_id}.json"
+    if not path.exists():
+        return {"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0}
+    import json
+    try:
+        spans = json.loads(path.read_text(encoding="utf-8")).get("spans", [])
+    except (OSError, json.JSONDecodeError):
+        return {"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0}
+    durations = [float(s.get("duration_ms") or 0.0) for s in spans if s.get("duration_ms") is not None]
+    if not durations:
+        return {"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0}
+    return {
+        "p50": round(percentile(durations, 50), 3),
+        "p95": round(percentile(durations, 95), 3),
+        "max": round(max(durations), 3),
+        "n": float(len(durations)),
+    }

@@ -1,0 +1,17 @@
+﻿# Sample Dataset
+
+面试演示用的本地稳定样例数据。
+
+## 内容
+
+- events.json — 9 条手写事件，覆盖 2 个竞品 (Coze / FastGPT) 的 4 类信号（product / pricing / hiring / gtm / risk）
+- signals.json — 9 条对应的市场信号（finding / analysis / recommendation / confidence 完整四段）
+
+## 用途
+
+用 python -m marketsignal.cli run --use-sample-dataset 触发，绕过 fetch / LLM / embedder 节点，0 网络 0 token 跑完整流水线，保证 demo 现场 100% 不翻车。
+
+## 维护
+
+新增竞品时同时补 events 与 signals 两份 JSON，引用关系走 source_event_indices 数组。
+

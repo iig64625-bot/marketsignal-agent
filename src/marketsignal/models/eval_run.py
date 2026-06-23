@@ -1,0 +1,21 @@
+﻿from __future__ import annotations
+
+from sqlalchemy import Float, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from marketsignal.models.base import Base, TimestampMixin, new_id
+
+
+class EvalRun(Base, TimestampMixin):
+    __tablename__ = "eval_runs"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=new_id)
+    crawl_run_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("crawl_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    citation_coverage: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    unsupported_claim_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    dedup_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    avg_latency_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    token_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    summary_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")

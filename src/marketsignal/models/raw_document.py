@@ -1,0 +1,27 @@
+﻿from __future__ import annotations
+
+import datetime as _dt
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from marketsignal.models.base import Base, new_id
+
+
+class RawDocument(Base):
+    __tablename__ = "raw_documents"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=new_id)
+    crawl_run_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("crawl_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("sources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fetched_at: Mapped[_dt.datetime] = mapped_column(DateTime, nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    raw_html_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    raw_text_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    checksum: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)

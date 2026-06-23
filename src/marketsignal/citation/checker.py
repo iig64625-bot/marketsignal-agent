@@ -1,0 +1,189 @@
+﻿"""Citation checker: extract claims from a report, verify against evidence, persist."""
+from __future__ import annotations
+
+import re
+
+from loguru import logger
+from sqlalchemy.orm import Session
+
+from marketsignal.models.citation import Citation
+from marketsignal.models.claim import Claim
+from marketsignal.models.normalized_document import NormalizedDocument
+from marketsignal.models.report import Report
+from marketsignal.rag.retriever import retrieve_evidence
+
+_SENTENCE_RE = re.compile(r"(?<=[.!?\n])\s+")
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]+")
+_STOPWORDS = {"the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "is", "are", "with", "this", "that"}
+
+
+def _split_claims_from_markdown(md: str, max_claims: int = 50) -> list[str]:
+    """Heuristically extract claim-sized sentences from a Markdown report."""
+    if not md:
+        return []
+    out: list[str] = []
+    for line in md.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("|"):
+            continue
+        if "_(no " in line and ")_" in line:
+            continue
+        for sentence in _SENTENCE_RE.split(line):
+            s = sentence.strip(" *-`")
+            if 20 <= len(s) <= 400:
+                out.append(s)
+        if len(out) >= max_claims:
+            break
+    return out[:max_claims]
+
+
+def _normalize_evidence(evidence_texts: list) -> list[tuple[str, str]]:
+    """Accept either ``list[str]`` or ``list[(text, url)]``; return ``list[(text, url)]``."""
+    out: list[tuple[str, str]] = []
+    for item in evidence_texts:
+        if isinstance(item, str):
+            out.append((item, ""))
+        elif isinstance(item, (tuple, list)) and item:
+            text = item[0] if isinstance(item[0], str) else ""
+            url = item[1] if len(item) > 1 and isinstance(item[1], str) else ""
+            out.append((text, url))
+    return out
+
+
+def _tokenize(text: str) -> set[str]:
+    if not isinstance(text, str):
+        return set()
+    return {t.lower() for t in _WORD_RE.findall(text) if len(t) > 3 and t.lower() not in _STOPWORDS}
+
+
+def _deterministic_support(claim: str, evidence_texts: list) -> tuple[bool, list[str]]:
+    """Keyword-overlap fallback when no LLM is available."""
+    claim_tokens = _tokenize(claim)
+    if not claim_tokens:
+        return False, []
+    threshold = max(2, len(claim_tokens) // 3)
+    for text, url in _normalize_evidence(evidence_texts):
+        text_tokens = _tokenize(text)
+        if not text_tokens:
+            continue
+        if len(claim_tokens & text_tokens) >= threshold:
+            return True, [url] if url else [""]
+    return False, []
+
+
+def _llm_support(claim: str, evidence_texts: list[str]) -> tuple[bool, list[str]]:
+    """Use the LLM to decide whether ``claim`` is supported by the evidence."""
+    from marketsignal.models.schemas import CitationCheckResult
+    from marketsignal.utils.llm import get_llm
+
+    llm = get_llm()
+    structured = llm.with_structured_output(CitationCheckResult)
+    evidence_block = "\n\n---\n\n".join(t for t, _ in _normalize_evidence(evidence_texts)) or "_(no evidence retrieved)_"
+    prompt = (
+        "CLAIM:\n"
+        f"{claim}\n\n"
+        "EVIDENCE SNIPPETS:\n"
+        f"{evidence_block[:4000]}\n\n"
+        "Return JSON: {claim_text, claim_type, is_supported, supporting_urls, notes}."
+    )
+    result: CitationCheckResult = structured.invoke(
+        [
+            {"role": "system", "content": "You are a strict fact-checker. Mark is_supported=false if evidence is missing or contradicts."},
+            {"role": "user", "content": prompt},
+        ]
+    )
+    return bool(result.is_supported), list(result.supporting_urls or [])
+
+
+def _collect_evidence_from_db(limit: int = 50) -> list[tuple[str, str]]:
+    """Scan :class:`NormalizedDocument` rows for keyword overlap (fallback when no embeddings)."""
+    from marketsignal.db.session import get_session
+    try:
+        with get_session() as s:
+            docs = s.query(NormalizedDocument).limit(limit).all()
+            return [(d.clean_text or "", d.canonical_url or "") for d in docs]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("fallback DB evidence scan failed: {}", exc)
+        return []
+
+
+def check_report_citations(report: Report, session: Session) -> list[Claim]:
+    """Check every claim extracted from ``report.markdown_path`` against evidence."""
+    claims_text = _split_claims_from_markdown(_read(report.markdown_path))
+    if not claims_text:
+        return []
+    use_llm = True
+    try:
+        from marketsignal.utils.llm import get_llm
+        get_llm()
+    except ValueError:
+        use_llm = False
+        logger.info("citation checker: using deterministic fallback (no LLM configured)")
+
+    out_claims: list[Claim] = []
+    for text in claims_text:
+        evidence = retrieve_evidence(text, n=3)
+        evidence_pairs = [(e["text"], e["metadata"].get("url", "")) for e in evidence]
+        if not evidence_pairs:
+            evidence_pairs = _collect_evidence_from_db()
+        if use_llm and evidence_pairs:
+            try:
+                is_supported, urls = _llm_support(text, evidence_pairs)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("llm citation check failed, falling back: {}", exc)
+                is_supported, urls = _deterministic_support(text, evidence_pairs)
+        else:
+            is_supported, urls = _deterministic_support(text, evidence_pairs)
+        from marketsignal.models.base import new_id
+        claim = Claim(
+            id=new_id(),
+            report_id=report.id,
+            claim_text=text,
+            claim_type="fact",
+            confidence=0.8 if is_supported else 0.4,
+            is_supported=is_supported,
+            supporting_citation_ids_json="[]",
+        )
+        session.add(claim)
+        session.flush()
+        if is_supported and urls:
+            for url in urls[:3]:
+                if not url:
+                    continue
+                cit = Citation(
+                    id=new_id(),
+                    report_id=report.id,
+                    claim_id=claim.id,
+                    document_id=None,
+                    url=url,
+                    snippet=text[:200],
+                )
+                session.add(cit)
+        out_claims.append(claim)
+    return out_claims
+
+
+def _read(path: str | None) -> str:
+    if not path:
+        return ""
+    try:
+        from pathlib import Path
+        return Path(path).read_text(encoding="utf-8", errors="ignore")
+    except (OSError, FileNotFoundError):
+        return ""
+
+
+def compute_citation_metrics(claims: list[Claim]) -> dict[str, float]:
+    if not claims:
+        return {"citation_coverage": 1.0, "unsupported_claim_rate": 0.0, "total_claims": 0.0}
+    total = len(claims)
+    supported = sum(1 for c in claims if c.is_supported)
+    return {
+        "citation_coverage": supported / total,
+        "unsupported_claim_rate": 1 - supported / total,
+        "total_claims": float(total),
+        "supported_claims": float(supported),
+    }
+
+
+__all__ = ["check_report_citations", "compute_citation_metrics", "_split_claims_from_markdown"]
