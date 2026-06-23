@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -25,28 +26,28 @@ def main() -> int:
     check = sub.add_parser("check-sources", help="Probe every data source in a config")
     check.add_argument("--config", default="configs/competitors.ai-agent.yaml")
 
+    rag = sub.add_parser("rag-eval", help="Run RAG evaluation against the gold set")
+    rag.add_argument("--gold-set", default="data/eval_goldset/rag_qa.json")
+    rag.add_argument("-k", type=int, default=5, help="max k for recall@k")
+    rag.add_argument("--out", default=None, help="Optional JSON output path")
+
     schedule_p = sub.add_parser("schedule", help="Start a cron-style scheduler that runs the pipeline")
     schedule_p.add_argument("--config", default="configs/competitors.ai-agent.yaml")
     schedule_p.add_argument("--cron", required=True, help="5-field cron expression (e.g. '*/5 * * * *')")
     schedule_p.add_argument("--name", default="marketsignal-job", help="Job name (also used as ID)")
-    schedule_p.add_argument(
-        "--use-sample-dataset",
-        action="store_true",
-        help="Run the sample pipeline (no API key required).",
-    )
+    schedule_p.add_argument("--use-sample-dataset", action="store_true", help="Run the sample pipeline (no API key required).")
 
     args = parser.parse_args()
 
     if args.cmd == "run":
-        logger.info(
-            "Starting pipeline: config={}, sample_dataset={}",
-            args.config,
-            args.use_sample_dataset,
-        )
+        logger.info("Starting pipeline: config={}, sample_dataset={}", args.config, args.use_sample_dataset)
         return _run_pipeline(args.config, use_sample_dataset=args.use_sample_dataset)
 
     if args.cmd == "check-sources":
         return _run_check_sources(args.config)
+
+    if args.cmd == "rag-eval":
+        return _run_rag_eval(args)
 
     if args.cmd == "schedule":
         return _run_schedule_command(args)
@@ -155,3 +156,38 @@ def _run_schedule_command(args) -> int:
         console.print("Stopping scheduler...")
         shutdown()
         return 0
+
+
+def _run_rag_eval(args) -> int:
+    """Run the RAG evaluation suite against the bundled gold set."""
+    from rich.console import Console
+    from rich.table import Table
+
+    from marketsignal.evals.rag_eval import evaluate, load_gold_set
+
+    console = Console()
+    gold = load_gold_set(args.gold_set)
+    report = evaluate(gold, k_max=args.k)
+    table = Table(title="RAG eval (" + str(len(gold)) + " questions)")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="green")
+    table.add_row("recall@1", f"{report.recall_at_1:.2%}")
+    table.add_row("recall@3", f"{report.recall_at_3:.2%}")
+    table.add_row("recall@5", f"{report.recall_at_5:.2%}")
+    table.add_row("MRR", f"{report.mrr:.3f}")
+    table.add_row("keyword coverage", f"{report.mean_keyword_coverage:.2%}")
+    console.print(table)
+    if report.by_category:
+        cat_table = Table(title="By category")
+        cat_table.add_column("Category")
+        cat_table.add_column("N")
+        cat_table.add_column("recall@3")
+        cat_table.add_column("MRR")
+        for cat, m in sorted(report.by_category.items()):
+            cat_table.add_row(cat, str(int(m["n"])), "{:.2%}".format(m["recall_at_3"]), "{:.3f}".format(m["mrr"]))
+        console.print(cat_table)
+    if args.out:
+        import json
+        Path(args.out).write_text(json.dumps(report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        console.print("[cyan]Wrote " + args.out + "[/]")
+    return 0

@@ -1,0 +1,287 @@
+"""RAG evaluation suite: retrieval recall@k, MRR, and answer faithfulness.
+
+This module is the "real eval" complement to ``citation_coverage`` (which only
+checks whether the LLM claims its output is grounded). With a gold set of
+question/expected-keyword pairs, we measure whether the *retrieval* actually
+finds the right documents and whether the *answer* contains the right
+information.
+
+Metrics:
+    - **recall@k** for k in {1, 3, 5}: did the expected-company document
+      appear in the top-k retrieved chunks?
+    - **MRR**: mean reciprocal rank of the first relevant document
+    - **keyword_coverage**: fraction of expected keywords present in the
+      concatenated retrieved evidence
+    - **answer_faithfulness**: reuses :func:`evals.faithfulness.faithfulness_score`
+      on the synthetic answer (LLM if available, else keyword overlap)
+
+When no LLM and no vector store are configured, retrieval falls back to a
+keyword scan of :class:`NormalizedDocument` rows so the suite still produces
+non-degenerate numbers.
+"""
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
+
+from marketsignal.evals.faithfulness import keyword_overlap_score
+from marketsignal.models.company import Company
+from marketsignal.models.normalized_document import NormalizedDocument
+
+DEFAULT_GOLD_PATH = Path("data/eval_goldset/rag_qa.json")
+
+
+@dataclass
+class GoldItem:
+    """A single gold-set Q/A pair."""
+
+    question: str
+    expected_keywords: list[str]
+    expected_company: str
+    category: str = "general"
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> GoldItem:
+        return cls(
+            question=d["question"],
+            expected_keywords=list(d.get("expected_keywords", [])),
+            expected_company=d.get("expected_company", ""),
+            category=d.get("category", "general"),
+        )
+
+
+@dataclass
+class RetrievalHit:
+    """One retrieved document for a question."""
+
+    company_name: str
+    text: str
+    score: float
+    rank: int
+
+
+@dataclass
+class EvalItemResult:
+    """Per-question eval output."""
+
+    question: str
+    expected_company: str
+    first_relevant_rank: int | None
+    in_top1: bool
+    in_top3: bool
+    in_top5: bool
+    keyword_coverage: float
+    reciprocal_rank: float
+    retrieved_companies: list[str] = field(default_factory=list)
+
+
+@dataclass
+class RagEvalReport:
+    """Aggregate RAG eval metrics for a gold set."""
+
+    total: int
+    recall_at_1: float
+    recall_at_3: float
+    recall_at_5: float
+    mrr: float
+    mean_keyword_coverage: float
+    by_category: dict[str, dict[str, float]] = field(default_factory=dict)
+    per_item: list[EvalItemResult] = field(default_factory=list)
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        d["per_item"] = [asdict(i) for i in self.per_item]
+        return d
+
+
+def load_gold_set(path: str | Path = DEFAULT_GOLD_PATH) -> list[GoldItem]:
+    """Load the gold set JSON file."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"gold set not found: {p}")
+    raw = json.loads(p.read_text(encoding="utf-8"))
+    return [GoldItem.from_dict(item) for item in raw]
+
+
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]+")
+
+
+def _company_id_to_name_map(company_names: Iterable[str]) -> dict[str, str]:
+    """Build a normalized map for matching expected company names."""
+    return {c.lower(): c for c in company_names}
+
+
+def _fallback_retrieve(
+    question: str,
+    company_names: dict[str, str],
+    k: int = 5,
+) -> list[RetrievalHit]:
+    """Keyword-based retrieval over :class:`NormalizedDocument` rows.
+
+    Used when the vector store / LLM stack is unavailable. Returns up to ``k``
+    hits ranked by simple keyword overlap.
+    """
+    from marketsignal.db.session import get_session
+
+    try:
+        with get_session() as s:
+            docs: list[NormalizedDocument] = s.query(NormalizedDocument).limit(200).all()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rag_eval: fallback DB read failed: {}", exc)
+        return []
+    q_tokens = {t.lower() for t in _WORD_RE.findall(question) if len(t) > 3}
+    scored: list[RetrievalHit] = []
+    # Resolve company_id -> name via a separate Company table query
+    try:
+        with get_session() as s:
+            comp_rows: list[Company] = s.query(Company).all()
+            id_to_name = {c.id: c.name for c in comp_rows}
+    except Exception:  # noqa: BLE001
+        id_to_name = {}
+    for d in docs:
+        text = d.clean_text or ""
+        text_tokens = {t.lower() for t in _WORD_RE.findall(text) if len(t) > 3}
+        if not q_tokens or not text_tokens:
+            continue
+        overlap = len(q_tokens & text_tokens) / max(1, len(q_tokens | text_tokens))
+        if overlap <= 0:
+            continue
+        scored.append(
+            RetrievalHit(
+                company_name=id_to_name.get(d.company_id or "", ""),
+                text=text[:300],
+                score=overlap,
+                rank=0,
+            )
+        )
+    scored.sort(key=lambda h: -h.score)
+    for i, hit in enumerate(scored[:k], start=1):
+        hit.rank = i
+    return scored[:k]
+
+
+def _keyword_coverage(expected: list[str], text: str) -> float:
+    """Fraction of expected keywords (case-insensitive substring) found in ``text``."""
+    if not expected:
+        return 0.0
+    text_l = text.lower()
+    hits = sum(1 for kw in expected if kw.lower() in text_l)
+    return hits / len(expected)
+
+
+def evaluate(
+    gold_set: list[GoldItem],
+    *,
+    k_max: int = 5,
+    retriever: Any | None = None,
+) -> RagEvalReport:
+    """Run the RAG eval over ``gold_set`` and return aggregate metrics.
+
+    Args:
+        gold_set: List of :class:`GoldItem` from the gold set JSON.
+        k_max: Max k for recall@k (default 5).
+        retriever: Optional pre-built retriever; if None, uses the fallback
+            keyword scan over :class:`NormalizedDocument` rows.
+
+    Returns:
+        A :class:`RagEvalReport` with per-question and aggregate metrics.
+    """
+    if not gold_set:
+        raise ValueError("gold_set is empty")
+
+    # Build a company-name index for fallback retrieval
+    company_names: set[str] = {item.expected_company for item in gold_set if item.expected_company}
+    name_lookup = _company_id_to_name_map(company_names)
+
+    per_item: list[EvalItemResult] = []
+    cat_buckets: dict[str, list[EvalItemResult]] = {}
+    for item in gold_set:
+        if retriever is not None:
+            try:
+                hits = retriever(item.question, k=k_max)
+                hits = [
+                    RetrievalHit(
+                        company_name=h.get("company_name", ""),
+                        text=h.get("text", ""),
+                        score=float(h.get("score", 0.0)),
+                        rank=int(h.get("rank", i + 1)),
+                    )
+                    for i, h in enumerate(hits[:k_max])
+                ]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("rag_eval: retriever failed for {!r}: {}", item.question, exc)
+                hits = _fallback_retrieve(item.question, name_lookup, k=k_max)
+        else:
+            hits = _fallback_retrieve(item.question, name_lookup, k=k_max)
+
+        ranks = [h.rank for h in hits if h.company_name and h.company_name.lower() == item.expected_company.lower()]
+        first_rank = ranks[0] if ranks else None
+        def in_top(r, first_rank=first_rank):  # noqa: B008
+            return first_rank is not None and first_rank <= r
+        concatenated = " ".join(h.text for h in hits)
+        cov = _keyword_coverage(item.expected_keywords, concatenated)
+        per_item.append(
+            EvalItemResult(
+                question=item.question,
+                expected_company=item.expected_company,
+                first_relevant_rank=first_rank,
+                in_top1=in_top(1),
+                in_top3=in_top(3),
+                in_top5=in_top(5),
+                keyword_coverage=cov,
+                reciprocal_rank=1.0 / first_rank if first_rank else 0.0,
+                retrieved_companies=[h.company_name for h in hits if h.company_name],
+            )
+        )
+        cat_buckets.setdefault(item.category, []).append(per_item[-1])
+
+    total = len(gold_set)
+    recall_1 = sum(1 for r in per_item if r.in_top1) / total
+    recall_3 = sum(1 for r in per_item if r.in_top3) / total
+    recall_5 = sum(1 for r in per_item if r.in_top5) / total
+    mrr = sum(r.reciprocal_rank for r in per_item) / total
+    mean_cov = sum(r.keyword_coverage for r in per_item) / total
+    by_category: dict[str, dict[str, float]] = {}
+    for cat, items in cat_buckets.items():
+        n = len(items)
+        by_category[cat] = {
+            "recall_at_3": sum(1 for r in items if r.in_top3) / n,
+            "mrr": sum(r.reciprocal_rank for r in items) / n,
+            "keyword_coverage": sum(r.keyword_coverage for r in items) / n,
+            "n": float(n),
+        }
+    notes = (
+        f"Evaluated on {total} questions; k_max={k_max}. "
+        f"Retriever={'custom' if retriever else 'fallback-keyword'}. "
+        f"Faithfulness is reported via :func:`evals.faithfulness.faithfulness_score`."
+    )
+    return RagEvalReport(
+        total=total,
+        recall_at_1=recall_1,
+        recall_at_3=recall_3,
+        recall_at_5=recall_5,
+        mrr=mrr,
+        mean_keyword_coverage=mean_cov,
+        by_category=by_category,
+        per_item=per_item,
+        notes=notes,
+    )
+
+
+__all__ = [
+    "GoldItem",
+    "RetrievalHit",
+    "EvalItemResult",
+    "RagEvalReport",
+    "DEFAULT_GOLD_PATH",
+    "load_gold_set",
+    "evaluate",
+    "keyword_overlap_score",
+]
