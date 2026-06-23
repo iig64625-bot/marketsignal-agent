@@ -44,3 +44,6 @@ data/evals/eval_*.json
 data/reports/battlecard_*.md
 data/reports/weekly_*.md
 data/traces/*.json
+
+# Local git config override (contains the GitHub token used by GIT_CONFIG_GLOBAL)
+.gitconfig.local
