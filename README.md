@@ -13,7 +13,7 @@
 
 > 一个能持续监控竞品公开动态、识别市场信号、并自动生成**带引用证据**的竞品周报和销售 Battlecard 的 AI Agent。
 
-[English](./README.md) · [简体中文](./README_CN.md) · [架构](./docs/architecture.md) · [Demo 脚本](./docs/demo-script.md)
+[English](./README.md) · [简体中文](./README_CN.md) · [架构](./docs/architecture.md) · [ADR 决策记录](./docs/architecture_decisions.md) · [Demo 脚本](./docs/demo-script.md)
 
 </div>
 
@@ -199,6 +199,7 @@ marketsignal-agent/
 │   └── competitors.ai-agent.yaml
 ├── docs/
 │   ├── architecture.md
+│   ├── architecture_decisions.md
 │   ├── workflow.md
 │   ├── data-model.md
 │   ├── api.md
