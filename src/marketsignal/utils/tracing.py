@@ -5,6 +5,12 @@ truncated input/output summary. Traces are written to
 ``data/traces/{run_id}.json`` so they can be diffed across runs or
 visualized in a notebook.
 
+The trace JSON is also written *incrementally* (one rewrite per completed
+span) so the WebSocket stream endpoint can poll for new spans without
+having to instrument the LangGraph runtime. This is a deliberate
+trade-off: a few extra disk writes per run, in exchange for being able
+to observe progress in real time without any in-memory pub/sub.
+
 As of the cost-dashboard upgrade, the trace JSON also embeds a
 :class:`RunMetrics` blob (per-node token usage, latency, cost) so the
 metrics endpoint and the eval runner can read it without re-instrumenting
@@ -67,6 +73,28 @@ _CURRENT: dict[str, PipelineTrace] = {}
 _METRICS: dict[str, RunMetrics] = {}
 
 
+def _trace_path(run_id: str) -> Path:
+    TRACE_DIR.mkdir(parents=True, exist_ok=True)
+    return TRACE_DIR / f"{run_id}.json"
+
+
+def _persist_trace(run_id: str) -> None:
+    """Write the in-memory trace + metrics blob to disk (best-effort)."""
+    trace = _CURRENT.get(run_id)
+    metrics = _METRICS.get(run_id)
+    if trace is None:
+        return
+    payload: dict[str, Any] = trace.to_dict()
+    if metrics is not None:
+        payload["metrics"] = metrics.to_dict()
+    try:
+        _trace_path(run_id).write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError as exc:
+        logger.warning("trace: persist failed for run_id={}: {}", run_id, exc)
+
+
 def start_trace(run_id: str) -> PipelineTrace:
     """Begin a new :class:`PipelineTrace` for ``run_id``."""
     trace = PipelineTrace(run_id=run_id, started_at=datetime.utcnow().isoformat() + "Z")
@@ -104,17 +132,16 @@ def finish_trace(run_id: str, status: str = "completed") -> PipelineTrace | None
     metrics = _METRICS.get(run_id)
     if metrics is not None:
         metrics.finished_at = trace.finished_at
-    TRACE_DIR.mkdir(parents=True, exist_ok=True)
-    payload: dict[str, Any] = trace.to_dict()
-    if metrics is not None:
-        payload["metrics"] = metrics.to_dict()
-    out = TRACE_DIR / f"{run_id}.json"
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    _persist_trace(run_id)
     return trace
 
 
 def trace_node(node_name: str) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
-    """Decorator: record this node's latency onto the active trace + metrics."""
+    """Decorator: record this node's latency onto the active trace + metrics.
+
+    The trace is written to disk on every completed span so that the
+    WebSocket stream endpoint can poll for new spans in real time.
+    """
 
     def decorator(fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         @functools.wraps(fn)
@@ -147,6 +174,8 @@ def trace_node(node_name: str) -> Callable[[Callable[..., Awaitable[T]]], Callab
                 metrics = _METRICS.get(run_id)
                 if metrics is not None:
                     metrics.record_node_latency(node_name, duration_ms)
+                # Persist on every span so the WebSocket can poll.
+                _persist_trace(run_id)
 
         return wrapper
 
@@ -155,7 +184,7 @@ def trace_node(node_name: str) -> Callable[[Callable[..., Awaitable[T]]], Callab
 
 def load_trace(run_id: str) -> dict[str, Any] | None:
     """Read a previously-saved trace from disk and return its JSON dict (or None)."""
-    path = TRACE_DIR / f"{run_id}.json"
+    path = _trace_path(run_id)
     if not path.exists():
         return None
     try:

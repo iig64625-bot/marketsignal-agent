@@ -16,6 +16,7 @@ from marketsignal.api.routes import (
     metrics_router,
     reports_router,
     runs_router,
+    ws_router,
 )
 from marketsignal.config.settings import get_settings
 
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router)
     app.include_router(runs_router)
     app.include_router(reports_router)
+    app.include_router(ws_router)
     return app
 
 
