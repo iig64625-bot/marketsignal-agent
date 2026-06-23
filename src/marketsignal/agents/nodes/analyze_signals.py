@@ -46,11 +46,16 @@ async def analyze_signals_node(state: GraphState) -> GraphState:
             company_name = company.name if company else company_id
             prompt = _build_prompt(company_name, group)
             try:
-                result: SignalListOutput = await structured.ainvoke(
-                    [
+                from marketsignal.observability.llm_tracking import invoke_with_metrics
+
+                result: SignalListOutput = await invoke_with_metrics(
+                    run_id=run_id,
+                    node="analyze_signals_node",
+                    llm=structured,
+                    messages=[
                         {"role": "system", "content": ANALYZE_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},
-                    ]
+                    ],
                 )
             except (ValidationError, ValueError, TypeError) as exc:
                 warnings.append(f"signal parse failed for {company_name}: {exc}")

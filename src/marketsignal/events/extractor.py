@@ -50,7 +50,12 @@ def _parse_json(content: str) -> dict[str, Any]:
     return json.loads(s)
 
 
-async def extract_events(doc: NormalizedDocument) -> list[Event]:
+async def extract_events(
+    doc: NormalizedDocument,
+    *,
+    run_id: str | None = None,
+    node: str = "extract_events",
+) -> list[Event]:
     """Call the LLM to extract structured events from a single document.
 
     Returns an empty list if extraction fails or the document has no events.
@@ -64,11 +69,16 @@ async def extract_events(doc: NormalizedDocument) -> list[Event]:
         return []
     structured = llm.with_structured_output(EventListOutput)
     try:
-        result: EventListOutput = await structured.ainvoke(
-            [
+        from marketsignal.observability.llm_tracking import invoke_with_metrics
+
+        result: EventListOutput = await invoke_with_metrics(
+            run_id=run_id,
+            node=node,
+            llm=structured,
+            messages=[
                 {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(doc)},
-            ]
+            ],
         )
     except (ValidationError, ValueError, TypeError) as exc:
         logger.warning("LLM returned invalid output: {}", exc)

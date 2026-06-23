@@ -38,6 +38,9 @@ async def generate_battlecard_extras(
     target_company: str,
     competitor: str,
     signals: list[Signal],
+    *,
+    run_id: str | None = None,
+    node: str = "generate_battlecard_extras",
 ) -> dict[str, Any]:
     """Call the LLM for sales_pitch + attack_points + talk_tracks.
 
@@ -63,11 +66,16 @@ async def generate_battlecard_extras(
 
     structured = llm.with_structured_output(BattlecardExtras)
     try:
-        result: BattlecardExtras = await structured.ainvoke(
-            [
+        from marketsignal.observability.llm_tracking import invoke_with_metrics
+
+        result: BattlecardExtras = await invoke_with_metrics(
+            run_id=run_id,
+            node=node,
+            llm=structured,
+            messages=[
                 {"role": "system", "content": _BATTLE_PROMPT},
                 {"role": "user", "content": _build_prompt(target_company, competitor, signals)},
-            ]
+            ],
         )
         return {
             "sales_pitch": result.sales_pitch,

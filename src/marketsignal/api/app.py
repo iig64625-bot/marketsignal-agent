@@ -11,7 +11,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from marketsignal.api.routes import health_router, reports_router, runs_router
+from marketsignal.api.routes import (
+    health_router,
+    metrics_router,
+    reports_router,
+    runs_router,
+)
 from marketsignal.config.settings import get_settings
 
 
@@ -57,6 +62,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(runs_router)
     app.include_router(reports_router)
     return app
