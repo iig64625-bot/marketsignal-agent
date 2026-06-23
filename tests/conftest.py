@@ -53,3 +53,37 @@ def tmp_data_dir():
                 os.environ.pop("CHROMA_PERSIST_DIR", None)
             else:
                 os.environ["CHROMA_PERSIST_DIR"] = prev_chroma
+
+@pytest.fixture(autouse=True, scope="session")
+def _ensure_db_tables_once() -> None:
+    """Create the SQLAlchemy tables once per test session.
+
+    Several tests in :mod:`tests.test_chaos` build a pipeline directly via
+    :func:`build_pipeline` and run it without going through any FastAPI
+    TestClient fixture. Those tests need the schema to exist. Rather than
+    create tables per test, we create them once at the start of the session;
+    the per-test ``tmp_data_dir`` fixture still gives each test a fresh
+    database file (the ``reset_session_factory`` call inside it ensures the
+    engine picks up the new URL).
+    """
+    # Set a default DB URL if none is set, so the engine can be created.
+    import os
+
+    os.environ.setdefault("DATABASE_URL", "sqlite:///./_test_session.db")
+    from marketsignal.db.engine import get_engine
+    from marketsignal.db.session import reset_session_factory
+    from marketsignal.models.base import Base
+
+    reset_session_factory()
+    Base.metadata.create_all(get_engine())
+    yield
+    # Best-effort cleanup; ignore errors so a failure here does not mask
+    # the real test result.
+    try:
+        get_engine().dispose()
+    except Exception:
+        pass
+    try:
+        Path("./_test_session.db").unlink(missing_ok=True)
+    except Exception:
+        pass
