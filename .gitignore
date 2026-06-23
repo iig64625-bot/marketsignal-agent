@@ -38,3 +38,9 @@ data/marketsignal.db-shm
 # OS
 .DS_Store
 Thumbs.db
+
+# Run artifacts (regenerated on every pipeline run)
+data/evals/eval_*.json
+data/reports/battlecard_*.md
+data/reports/weekly_*.md
+data/traces/*.json
