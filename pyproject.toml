@@ -38,6 +38,7 @@ dependencies = [
   "trafilatura>=1.7",
   "readability-lxml>=0.8",
   "feedparser>=6.0",
+  "langdetect>=1.0.9",
   "PyGithub>=2.3",
   "playwright>=1.43",
 
