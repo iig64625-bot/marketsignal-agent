@@ -287,3 +287,15 @@ marketsignal-agent/
 ## 📜 License
 
 MIT
+
+
+### Live API endpoints (V2 additions)
+
+| Method | Path                       | What it does                                                  |
+| ------ | -------------------------- | ------------------------------------------------------------- |
+| GET    | `/metrics/{run_id}`        | Per-run cost (USD) + latency (p50/p95/max) + per-node breakdown |
+| WS     | `/ws/runs/{run_id}`        | Live pipeline progress: snapshot + per-span + done events      |
+
+Both are wired into the Streamlit UI: the **Run history** tab now
+shows a live progress panel that subscribes to the WebSocket and
+paints each node as it completes.
