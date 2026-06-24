@@ -13,8 +13,8 @@ def new_id() -> str:
 
 
 def utcnow() -> _dt.datetime:
-    """Return the current UTC time (naive, matching `datetime.utcnow`)."""
-    return _dt.datetime.utcnow()
+    """Return the current UTC time (timezone-aware)."""
+    return _dt.datetime.now(_dt.timezone.utc)
 
 
 class Base(DeclarativeBase):

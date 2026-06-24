@@ -157,7 +157,7 @@ def _persist_trace(run_id: str) -> None:
 
 def start_trace(run_id: str) -> PipelineTrace:
     """Begin a new :class:`PipelineTrace` for ``run_id``."""
-    trace = PipelineTrace(run_id=run_id, started_at=datetime.utcnow().isoformat() + "Z")
+    trace = PipelineTrace(run_id=run_id, started_at=datetime.now(timezone.utc).isoformat() + "Z")
     _CURRENT[run_id] = trace
     metrics = RunMetrics(run_id=run_id)
     metrics.started_at = trace.started_at
@@ -189,7 +189,7 @@ def finish_trace(run_id: str, status: str = "completed") -> PipelineTrace | None
     trace = _CURRENT.get(run_id)
     if not trace:
         return None
-    trace.finished_at = datetime.utcnow().isoformat() + "Z"
+    trace.finished_at = datetime.now(timezone.utc).isoformat() + "Z"
     trace.status = status
     metrics = _METRICS.get(run_id)
     if metrics is not None:
@@ -216,7 +216,7 @@ def trace_node(node_name: str) -> Callable[[Callable[..., Awaitable[T]]], Callab
             trace = _CURRENT.get(run_id) or start_trace(run_id)
             span = NodeSpan(
                 node=node_name,
-                entered_at=datetime.utcnow().isoformat() + "Z",
+                entered_at=datetime.now(timezone.utc).isoformat() + "Z",
                 input_keys=sorted(state.keys()) if isinstance(state, dict) else [],
             )
             t0 = time.perf_counter()
@@ -231,7 +231,7 @@ def trace_node(node_name: str) -> Callable[[Callable[..., Awaitable[T]]], Callab
                 span.error = str(exc)[:512]
                 raise
             finally:
-                span.exited_at = datetime.utcnow().isoformat() + "Z"
+                span.exited_at = datetime.now(timezone.utc).isoformat() + "Z"
                 duration_ms = (time.perf_counter() - t0) * 1000.0
                 span.duration_ms = duration_ms
                 trace.add_span(span)

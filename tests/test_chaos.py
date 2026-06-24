@@ -7,6 +7,7 @@ come from upstream service degradation, not from bugs in our own code.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -223,7 +224,7 @@ def test_db_session_rolls_back_on_exception(tmp_data_dir) -> None:
     raised = False
     try:
         with get_session() as s:
-            s.add(CrawlRun(id="x", started_at=__import__("datetime").datetime.utcnow(), status="pending", triggered_by="chaos"))
+            s.add(CrawlRun(id="x", started_at=datetime.now(timezone.utc), status="pending", triggered_by="chaos"))
             s.flush()
             raise RuntimeError("simulated mid-transaction failure")
     except RuntimeError:

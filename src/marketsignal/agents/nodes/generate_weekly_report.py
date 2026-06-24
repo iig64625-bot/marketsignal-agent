@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -49,7 +49,7 @@ async def generate_weekly_report_node(state: GraphState) -> GraphState:
             crawl_run_id=run_id,
             report_type="weekly",
             company_id=None,
-            title=f"Weekly Report {datetime.utcnow().date().isoformat()}",
+            title=f"Weekly Report {datetime.now(timezone.utc).date().isoformat()}",
             markdown_path=str(path),
             json_path=None,
         )

@@ -60,7 +60,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         # NOTE: never use ["*"] with allow_credentials=True — browsers
         # reject the wildcard. See config/settings.py:cors_origins.
-        allow_origins=settings.cors_origins,
+        allow_origins=settings.effective_cors_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

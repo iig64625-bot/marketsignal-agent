@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 🛰️ MarketSignal Agent
 
@@ -295,6 +295,7 @@ MIT
 | ------ | -------------------------- | ------------------------------------------------------------- |
 | GET    | `/metrics/{run_id}`        | Per-run cost (USD) + latency (p50/p95/max) + per-node breakdown |
 | WS     | `/ws/runs/{run_id}`        | Live pipeline progress: snapshot + per-span + done events      |
+| DELETE | `/runs/{run_id}`           | Delete a crawl run and its associated eval runs                |
 
 Both are wired into the Streamlit UI: the **Run history** tab now
 shows a live progress panel that subscribes to the WebSocket and

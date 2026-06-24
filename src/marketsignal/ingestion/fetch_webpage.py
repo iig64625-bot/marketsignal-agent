@@ -1,11 +1,10 @@
 ﻿"""Generic webpage fetcher."""
 from __future__ import annotations
 
-import datetime as _dt
 from pathlib import Path
 
 from marketsignal.ingestion.http_client import HttpClient, checksum_bytes
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.raw_document import RawDocument
 
 
@@ -43,7 +42,7 @@ async def fetch_webpage(
     try:
         response = await client.fetch(url)
         body = response.content
-        ts = _dt.datetime.utcnow()
+        ts = utcnow()
         suffix = ".html"
         content_type = response.headers.get("content-type", "")
         if "xml" in content_type or url.endswith(".xml"):

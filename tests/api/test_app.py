@@ -95,11 +95,12 @@ def test_get_run_after_create(client: TestClient) -> None:
 
 
 def test_list_reports_filters_by_type(client: TestClient) -> None:
+    import datetime as _dt
     """``GET /reports?report_type=weekly`` filters by type."""
     from marketsignal.db.session import get_session
 
     with get_session() as s:
-        run = CrawlRun(id=new_id(), started_at=__import__("datetime").datetime.utcnow(), status="completed", triggered_by="test")
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
         s.add(run)
         s.flush()
         s.add(
@@ -136,7 +137,7 @@ def test_report_markdown_endpoint(tmp_data_dir: str, client: TestClient) -> None
     md_path = Path(tmp_data_dir) / "test_report.md"
     md_path.write_text("# Hello\n", encoding="utf-8")
     with get_session() as s:
-        run = CrawlRun(id=new_id(), started_at=_dt.datetime.utcnow(), status="completed", triggered_by="test")
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
         s.add(run)
         s.flush()
         report = Report(
@@ -163,7 +164,7 @@ def test_report_download_returns_file(tmp_data_dir: str, client: TestClient) -> 
     md_path = Path(tmp_data_dir) / "dl.md"
     md_path.write_text("body", encoding="utf-8")
     with get_session() as s:
-        run = CrawlRun(id=new_id(), started_at=_dt.datetime.utcnow(), status="completed", triggered_by="test")
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
         s.add(run)
         s.flush()
         r = Report(id=new_id(), crawl_run_id=run.id, report_type="weekly", title="T", markdown_path=str(md_path))

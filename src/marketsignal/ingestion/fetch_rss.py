@@ -1,14 +1,13 @@
 ﻿"""RSS / Atom feed fetcher."""
 from __future__ import annotations
 
-import datetime as _dt
 from typing import Any
 
 import feedparser
 from loguru import logger
 
 from marketsignal.ingestion.http_client import HttpClient, checksum_bytes
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.raw_document import RawDocument
 
 
@@ -30,7 +29,7 @@ def _entry_to_raw(
         source_id=source_id,
         url=url,
         http_status=200,
-        fetched_at=_dt.datetime.utcnow(),
+        fetched_at=utcnow(),
         content_type="application/rss+xml",
         raw_text_path=None,
         raw_html_path=None,

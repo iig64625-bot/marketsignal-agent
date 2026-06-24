@@ -13,7 +13,7 @@ from typing import Any
 from loguru import logger
 
 from marketsignal.db.session import get_session
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.company import Company
 from marketsignal.models.crawl_run import CrawlRun
 from marketsignal.models.event import Event
@@ -47,7 +47,7 @@ def load_sample_dataset(*, target_name: str = "Dify") -> str:
     """Insert the curated sample events and signals. Returns the new ``run_id``."""
     events = _load_json(EVENTS_FILE)
     signals = _load_json(SIGNALS_FILE)
-    now = _dt.datetime.utcnow()
+    now = utcnow()
     run_id = new_id()
     with get_session() as s:
         run = CrawlRun(

@@ -1,4 +1,4 @@
-"""CLI entry point for the MarketSignal Agent pipeline."""
+﻿"""CLI entry point for the MarketSignal Agent pipeline."""
 
 from __future__ import annotations
 
@@ -22,6 +22,11 @@ def main() -> int:
         action="store_true",
         help="Skip fetch / LLM steps and use the curated sample dataset (no API key needed).",
     )
+    run.add_argument(
+        "--target",
+        default=None,
+        help="Override the target company name (default: read from config YAML).",
+    )
 
     check = sub.add_parser("check-sources", help="Probe every data source in a config")
     check.add_argument("--config", default="configs/competitors.ai-agent.yaml")
@@ -40,8 +45,8 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.cmd == "run":
-        logger.info("Starting pipeline: config={}, sample_dataset={}", args.config, args.use_sample_dataset)
-        return _run_pipeline(args.config, use_sample_dataset=args.use_sample_dataset)
+        logger.info("Starting pipeline: config={}, sample_dataset={}, target={}", args.config, args.use_sample_dataset, args.target)
+        return _run_pipeline(args.config, use_sample_dataset=args.use_sample_dataset, target_override=args.target)
 
     if args.cmd == "check-sources":
         return _run_check_sources(args.config)
@@ -55,20 +60,23 @@ def main() -> int:
     return 1
 
 
-def _run_pipeline(config_path: str, *, use_sample_dataset: bool) -> int:
+def _run_pipeline(config_path: str, *, use_sample_dataset: bool, target_override: str | None = None) -> int:
     """Invoke the LangGraph pipeline. Returns process exit code.
 
     The ``target_company`` is read from the YAML config. If the config
     is unreadable we fall back to the bundled default of "Dify" so the
-    CLI still works for ad-hoc smoke tests.
+    CLI still works for ad-hoc smoke tests.  Use ``target_override`` to
+    force a specific company name from the command line.
     """
     from marketsignal.agents.graph import build_pipeline
     from marketsignal.config.loader import load_pipeline_config
 
-    target_company = "Dify"  # safe fallback
+    target_company = target_override or "Dify"  # safe fallback
     try:
-        target_company = load_pipeline_config(config_path).target.name
+        target_company = target_override or load_pipeline_config(config_path).target.name
     except Exception as cfg_exc:  # noqa: BLE001
+        if target_override:
+            target_company = target_override
         logger.warning("cli: failed to load target_company from {}: {}", config_path, cfg_exc)
     pipeline = build_pipeline(use_sample_dataset=use_sample_dataset)
     initial: dict[str, Any] = {

@@ -1,4 +1,4 @@
-﻿"""Convert a :class:`RawDocument` into a :class:`NormalizedDocument`."""
+"""Convert a :class:`RawDocument` into a :class:`NormalizedDocument`."""
 from __future__ import annotations
 
 import datetime as _dt
@@ -6,6 +6,7 @@ import hashlib
 import re
 from pathlib import Path
 
+from langdetect.lang_detect_exception import LangDetectException
 from loguru import logger
 
 from marketsignal.models.base import new_id
@@ -72,7 +73,7 @@ def extract_content(raw: RawDocument, *, company_id: str) -> NormalizedDocument:
         from langdetect import detect
 
         language = detect(clean[:4000]) if clean else "en"
-    except Exception as exc:
+    except LangDetectException as exc:
         logger.debug("content_extractor: language detect failed, default to en: {}", exc)
         language = "en"
     published = _parse_published(raw_text)

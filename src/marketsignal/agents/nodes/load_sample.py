@@ -8,6 +8,7 @@ from loguru import logger
 from marketsignal.agents.state import GraphState
 from marketsignal.db.engine import get_engine
 from marketsignal.db.session import get_session, reset_session_factory
+from marketsignal.models.base import utcnow
 from marketsignal.models.event import Event
 from marketsignal.models.normalized_document import NormalizedDocument
 from marketsignal.models.signal import Signal
@@ -35,8 +36,8 @@ async def load_sample_node(state: GraphState) -> GraphState:
         "target_company": state.get("target_company", "Dify"),
         "competitor_ids": [],
         "source_ids": [],
-        "time_window_start": (_dt.datetime.utcnow() - _dt.timedelta(days=7)).isoformat(),
-        "time_window_end": _dt.datetime.utcnow().isoformat(),
+        "time_window_start": (utcnow() - _dt.timedelta(days=7)).isoformat(),
+        "time_window_end": utcnow().isoformat(),
         "raw_document_ids": [],
         "normalized_document_ids": norm_ids,
         "event_ids": event_ids,

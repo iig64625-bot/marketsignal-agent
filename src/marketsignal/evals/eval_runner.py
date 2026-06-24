@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +41,7 @@ class EvalReport:
     tokens_in: int = 0
     tokens_out: int = 0
     llm_calls: int = 0
-    generated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat() + "Z")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

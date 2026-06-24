@@ -19,7 +19,7 @@ def test_app_does_not_use_wildcard_cors() -> None:
     src = inspect.getsource(create_app)
     # Use a placeholder to avoid escaping issues: ensure the source has
     # the settings-driven allow_origins line and the wildcard is not used.
-    assert "allow_origins=settings.cors_origins" in src
+    assert "allow_origins=settings.effective_cors_origins()" in src
     assert 'allow_origins=["*"]' not in src
 
 

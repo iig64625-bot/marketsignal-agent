@@ -25,7 +25,7 @@ class SourceHealth:
     response_time_ms: float | None = None
     content_type: str = ""
     error: str | None = None
-    checked_at: str = field(default_factory=lambda: _dt.datetime.utcnow().isoformat() + "Z")
+    checked_at: str = field(default_factory=lambda: _dt.datetime.now(_dt.timezone.utc).isoformat() + "Z")
 
     def badge(self) -> str:
         """Return a human-friendly traffic-light label."""

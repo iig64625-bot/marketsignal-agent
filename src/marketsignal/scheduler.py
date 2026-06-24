@@ -158,7 +158,7 @@ def remove_job(job_id: str) -> bool:
     if job_id in _state:
         try:
             sched.remove_job(job_id)
-        except Exception as exc:  # noqa: BLE001
+        except (KeyError, LookupError) as exc:
             logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc)
         del _state[job_id]
         _save_jobs()

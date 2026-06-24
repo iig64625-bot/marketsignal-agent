@@ -1,4 +1,4 @@
-"""Application settings loaded from environment variables."""
+﻿"""Application settings loaded from environment variables."""
 
 from functools import lru_cache
 
@@ -55,18 +55,27 @@ class Settings(BaseSettings):
     citation_coverage_target: float = 0.9
     unsupported_claim_target: float = 0.1
 
-
     # HTTP / CORS
     # WARNING: never combine `cors_origins=["*"]` with `allow_credentials=True`
-    # — browsers reject the response. This allowlist is the safe default for
-    # local Streamlit + React dev. Override via the CORS_ORIGINS env var
-    # (JSON array, e.g. '["http://localhost:8501"]').
+    # -- browsers reject the response. This allowlist is the safe default for
+    # local Streamlit + React dev. Override via the CORS_ORIGINS_STR env var
+    # (comma-separated, e.g. 'http://localhost:8501,http://localhost:3000').
     cors_origins: list[str] = [
         "http://localhost:8501",  # Streamlit
         "http://localhost:3000",  # next.js / react
         "http://127.0.0.1:8501",
         "http://127.0.0.1:3000",
     ]
+    cors_origins_str: str = ""
+    """Comma-separated override for CORS origins. If set, takes precedence over cors_origins."""
+
+    def effective_cors_origins(self) -> list[str]:
+        """Return CORS origins from the env override or the default list."""
+        if self.cors_origins_str:
+            return [o.strip() for o in self.cors_origins_str.split(",") if o.strip()]
+        return self.cors_origins
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

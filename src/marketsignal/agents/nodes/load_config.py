@@ -9,7 +9,7 @@ from marketsignal.agents.state import GraphState
 from marketsignal.config.loader import load_pipeline_config
 from marketsignal.config.settings import get_settings
 from marketsignal.db.session import get_session
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.company import Company
 from marketsignal.models.crawl_run import CrawlRun
 from marketsignal.models.source import Source
@@ -24,7 +24,7 @@ async def load_config_node(state: GraphState) -> GraphState:
         # Fall back to a path embedded in env or default
         config_path = get_settings().default_time_window_days and "configs/competitors.ai-agent.yaml"
     cfg = load_pipeline_config(config_path or "configs/competitors.ai-agent.yaml")
-    now = _dt.datetime.utcnow()
+    now = utcnow()
     run_id = new_id()
     with get_session() as s:
         run = CrawlRun(

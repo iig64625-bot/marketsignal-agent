@@ -1,4 +1,4 @@
-﻿"""Chroma-backed vector store for document chunks."""
+"""Chroma-backed vector store for document chunks."""
 from __future__ import annotations
 
 import json
@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import chromadb.errors
 from loguru import logger
 
 from marketsignal.config.settings import get_settings
@@ -106,7 +107,7 @@ class MarketSignalVectorStore:
         """Drop the entire collection (used by tests)."""
         try:
             self._client.delete_collection(COLLECTION)
-        except Exception as exc:  # noqa: BLE001
+        except (ValueError, chromadb.errors.ChromaError) as exc:
             logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc)
         self._collection = self._client.get_or_create_collection(
             name=COLLECTION, metadata={"hnsw:space": "cosine"}

@@ -9,7 +9,7 @@ from pathlib import Path
 from loguru import logger
 
 from marketsignal.ingestion.http_client import HttpClient, checksum_bytes
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.raw_document import RawDocument
 
 _REPO_RE = re.compile(r"github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$")
@@ -47,7 +47,7 @@ async def fetch_github_releases(
         body = await client.fetch_bytes(api_url)
         if raw_root is None:
             raw_root = Path.cwd()
-        target = _raw_dir(raw_root, crawl_run_id) / f"{source_id}_{int(_dt.datetime.utcnow().timestamp() * 1000)}.json"
+        target = _raw_dir(raw_root, crawl_run_id) / f"{source_id}_{int(_dt.datetime.now(_dt.timezone.utc).timestamp() * 1000)}.json"
         target.write_bytes(body)
         releases = json.loads(body)
         if not isinstance(releases, list):
@@ -66,7 +66,7 @@ async def fetch_github_releases(
                     source_id=source_id,
                     url=rel.get("html_url", api_url),
                     http_status=200,
-                    fetched_at=_dt.datetime.utcnow(),
+                    fetched_at=utcnow(),
                     content_type="application/json",
                     raw_text_path=str(target),
                     raw_html_path=None,

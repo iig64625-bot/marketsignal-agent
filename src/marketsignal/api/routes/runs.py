@@ -12,7 +12,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from marketsignal.api.deps import get_db
-from marketsignal.models.base import new_id
+from marketsignal.models.base import new_id, utcnow
 from marketsignal.models.crawl_run import CrawlRun
 from marketsignal.models.eval_run import EvalRun
 
@@ -29,6 +29,10 @@ class RunCreateRequest(BaseModel):
     use_sample_dataset: bool = Field(
         default=False,
         description="Skip fetch / LLM and use the bundled sample dataset.",
+    )
+    target_company: str | None = Field(
+        default=None,
+        description="Override the target company name (default: read from config YAML).",
     )
     triggered_by: str = Field(default="api", max_length=64)
 
@@ -107,7 +111,7 @@ def get_run(run_id: str, session: Session = Depends(get_db)) -> RunResponse:
     return _serialize_run(run, _latest_metrics(run_id, session))
 
 
-def _execute_pipeline_async(run_id: str, config_path: str, use_sample_dataset: bool) -> None:
+def _execute_pipeline_async(run_id: str, config_path: str, use_sample_dataset: bool, target_company_override: str | None = None) -> None:
     """Background task: run the pipeline and persist its result.
 
     Runs in the FastAPI BackgroundTasks threadpool, so we can safely
@@ -140,7 +144,7 @@ def _execute_pipeline_async(run_id: str, config_path: str, use_sample_dataset: b
             row = s.get(CrawlRun, run_id)
             if row:
                 row.status = str(result.get("status", "completed"))
-                row.finished_at = _dt.datetime.utcnow()
+                row.finished_at = utcnow()
                 errs = result.get("warnings") or []
                 row.error_message = "\n".join(errs) if errs else None
     except Exception as exc:  # noqa: BLE001
@@ -148,7 +152,7 @@ def _execute_pipeline_async(run_id: str, config_path: str, use_sample_dataset: b
             row = s.get(CrawlRun, run_id)
             if row:
                 row.status = "failed"
-                row.finished_at = _dt.datetime.utcnow()
+                row.finished_at = utcnow()
                 row.error_message = str(exc)[:2048]
 
 
@@ -160,7 +164,7 @@ def create_run(
 ) -> RunResponse:
     """Kick off a new crawl run in the background and return the new :class:`CrawlRun`."""
     run_id = new_id()
-    now = _dt.datetime.utcnow()
+    now = utcnow()
     window_end = now
     window_start = now - _dt.timedelta(days=7)
     run = CrawlRun(
@@ -173,8 +177,18 @@ def create_run(
     )
     session.add(run)
     session.flush()
-    background.add_task(_execute_pipeline_async, run_id, body.config_path, body.use_sample_dataset)
+    background.add_task(_execute_pipeline_async, run_id, body.config_path, body.use_sample_dataset, body.target_company)
     return _serialize_run(run, {})
 
+
+@router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_run(run_id: str, session: Session = Depends(get_db)) -> None:
+    """Delete a crawl run and its associated eval runs."""
+    run = session.get(CrawlRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+    session.query(EvalRun).filter_by(crawl_run_id=run_id).delete()
+    session.delete(run)
+    session.flush()
 
 __all__ = ["router", "RunResponse", "RunCreateRequest"]
