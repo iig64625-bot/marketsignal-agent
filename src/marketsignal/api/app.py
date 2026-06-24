@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     """Build a configured :class:`FastAPI` instance."""
+    settings = get_settings()
     app = FastAPI(
         title="MarketSignal Agent API",
         version="0.1.0",
@@ -57,7 +58,9 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        # NOTE: never use ["*"] with allow_credentials=True — browsers
+        # reject the wildcard. See config/settings.py:cors_origins.
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
