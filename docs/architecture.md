@@ -257,3 +257,10 @@ flowchart LR
 - `tests/agents/*` — 节点连接 + 状态结构
 
 总计 57 个测试，Windows + Python 3.10 全绿。
+
+### Observability cap (2026-06)
+
+The ``data/traces/`` directory and the in-memory trace registry are
+bounded to **50 entries / 24 hours** (see ADR-011). Long-running
+deployments should copy old trace JSON files to cold storage before
+the next pipeline run evicts them.
