@@ -6,11 +6,12 @@ import datetime as _dt
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from marketsignal.api.deps import get_db, get_pipeline
+from marketsignal.api.deps import get_db
 from marketsignal.models.base import new_id
 from marketsignal.models.crawl_run import CrawlRun
 from marketsignal.models.eval_run import EvalRun
@@ -107,21 +108,29 @@ def get_run(run_id: str, session: Session = Depends(get_db)) -> RunResponse:
 
 
 def _execute_pipeline_async(run_id: str, config_path: str, use_sample_dataset: bool) -> None:
-    """Background task: run the pipeline and persist its result."""
+    """Background task: run the pipeline and persist its result.
+
+    Runs in the FastAPI BackgroundTasks threadpool, so we can safely
+    use ``asyncio.run`` to drive the (async-only) LangGraph pipeline.
+    The ``target_company`` is read from the YAML config so the same
+    API endpoint respects the user's competitor config.
+    """
+    from marketsignal.agents.graph import build_pipeline
+    from marketsignal.config.loader import load_pipeline_config
     from marketsignal.db.session import get_session
 
     try:
-        pipeline = (
-            get_pipeline()  # type: ignore[func-returns-value]
-            if False  # never call get_pipeline here (would re-raise 503)
-            else __import__("marketsignal.agents.graph", fromlist=["build_pipeline"]).build_pipeline(
-                use_sample_dataset=use_sample_dataset
-            )
-        )
+        target_company = "Dify"  # safe fallback if config is unreadable
+        try:
+            cfg = load_pipeline_config(config_path)
+            target_company = cfg.target.name
+        except Exception as cfg_exc:  # noqa: BLE001
+            logger.warning("runs: failed to load target_company from {}: {}", config_path, cfg_exc)
+        pipeline = build_pipeline(use_sample_dataset=use_sample_dataset)
         initial: dict[str, Any] = {
             "_config_path": config_path,
             "run_id": run_id,
-            "target_company": "Dify",
+            "target_company": target_company,
             "warnings": [],
             "metrics": {},
             "status": "pending",
