@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import functools
 import json
+import threading
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -34,6 +35,17 @@ from marketsignal.observability.run_metrics import RunMetrics
 T = TypeVar("T")
 
 TRACE_DIR = Path("data/traces")
+
+# Cap on the in-memory trace registry. When the count exceeds this, the
+# oldest entries (insertion order) are evicted. 50 is enough for any
+# single long-running API process to keep a useful debug window.
+_MAX_ENTRIES = 50
+# 24-hour TTL on the on-disk trace file. After this, ``_prune`` will
+# delete the JSON file and the in-memory entry. This bounds disk
+# usage in long-lived deployments.
+_MAX_AGE_SECONDS = 24 * 3600
+
+_LOCK = threading.Lock()
 
 
 @dataclass
@@ -73,6 +85,54 @@ _CURRENT: dict[str, PipelineTrace] = {}
 _METRICS: dict[str, RunMetrics] = {}
 
 
+def _drop_locked(run_id: str) -> None:
+    """Remove a run from both dicts and delete the on-disk trace file.
+
+    Caller must hold ``_LOCK``.
+    """
+    _CURRENT.pop(run_id, None)
+    _METRICS.pop(run_id, None)
+    try:
+        _trace_path(run_id).unlink(missing_ok=True)
+    except OSError as exc:
+        logger.debug("trace: cleanup of {}.json failed: {}", run_id, exc)
+
+
+def _prune_locked() -> None:
+    """Bound the in-memory dict size AND the on-disk trace directory.
+
+    Two eviction policies, both applied every time we touch the dict:
+
+    1. Age-based: anything whose ``RunMetrics.finished_at`` is older
+       than :data:`_MAX_AGE_SECONDS` is dropped. Naive ISO strings are
+       treated as UTC (the producer appends "Z" and we strip it).
+    2. Cap-based: if we still exceed :data:`_MAX_ENTRIES`, the
+       oldest entries (dict insertion order) are dropped.
+
+    Caller must hold ``_LOCK``.
+    """
+    now = time.time()
+    # 1) age-based eviction
+    for run_id in list(_METRICS.keys()):
+        rm = _METRICS.get(run_id)
+        if rm is None or not rm.finished_at:
+            continue
+        try:
+            finished_ts = (
+                datetime.fromisoformat(rm.finished_at.rstrip("Z"))
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            )
+        except ValueError:
+            continue
+        if now - finished_ts > _MAX_AGE_SECONDS:
+            _drop_locked(run_id)
+    # 2) cap-based eviction
+    while len(_METRICS) > _MAX_ENTRIES:
+        oldest_run_id = next(iter(_METRICS))
+        _drop_locked(oldest_run_id)
+
+
 def _trace_path(run_id: str) -> Path:
     TRACE_DIR.mkdir(parents=True, exist_ok=True)
     return TRACE_DIR / f"{run_id}.json"
@@ -102,6 +162,8 @@ def start_trace(run_id: str) -> PipelineTrace:
     metrics = RunMetrics(run_id=run_id)
     metrics.started_at = trace.started_at
     _METRICS[run_id] = metrics
+    with _LOCK:
+        _prune_locked()
     logger.info("trace: started run_id={}", run_id)
     return trace
 
@@ -133,6 +195,8 @@ def finish_trace(run_id: str, status: str = "completed") -> PipelineTrace | None
     if metrics is not None:
         metrics.finished_at = trace.finished_at
     _persist_trace(run_id)
+    with _LOCK:
+        _prune_locked()
     return trace
 
 
