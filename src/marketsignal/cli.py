@@ -56,13 +56,24 @@ def main() -> int:
 
 
 def _run_pipeline(config_path: str, *, use_sample_dataset: bool) -> int:
-    """Invoke the LangGraph pipeline. Returns process exit code."""
-    from marketsignal.agents.graph import build_pipeline
+    """Invoke the LangGraph pipeline. Returns process exit code.
 
+    The ``target_company`` is read from the YAML config. If the config
+    is unreadable we fall back to the bundled default of "Dify" so the
+    CLI still works for ad-hoc smoke tests.
+    """
+    from marketsignal.agents.graph import build_pipeline
+    from marketsignal.config.loader import load_pipeline_config
+
+    target_company = "Dify"  # safe fallback
+    try:
+        target_company = load_pipeline_config(config_path).target.name
+    except Exception as cfg_exc:  # noqa: BLE001
+        logger.warning("cli: failed to load target_company from {}: {}", config_path, cfg_exc)
     pipeline = build_pipeline(use_sample_dataset=use_sample_dataset)
     initial: dict[str, Any] = {
         "_config_path": config_path,
-        "target_company": "Dify",
+        "target_company": target_company,
         "warnings": [],
         "metrics": {},
         "status": "pending",
