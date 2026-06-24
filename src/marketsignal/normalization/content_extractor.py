@@ -6,6 +6,8 @@ import hashlib
 import re
 from pathlib import Path
 
+from loguru import logger
+
 from marketsignal.models.base import new_id
 from marketsignal.models.normalized_document import NormalizedDocument
 from marketsignal.models.raw_document import RawDocument
@@ -45,7 +47,8 @@ def _parse_published(text: str) -> _dt.datetime | None:
                 from dateutil import parser as _p  # type: ignore
 
                 return _p.parse(m.group(1))
-            except Exception:
+            except (ValueError, OverflowError, UnicodeDecodeError) as exc:
+                logger.debug("content_extractor: skip unparseable timestamp: {}", exc)
                 continue
     return None
 
@@ -69,7 +72,8 @@ def extract_content(raw: RawDocument, *, company_id: str) -> NormalizedDocument:
         from langdetect import detect
 
         language = detect(clean[:4000]) if clean else "en"
-    except Exception:
+    except Exception as exc:
+        logger.debug("content_extractor: language detect failed, default to en: {}", exc)
         language = "en"
     published = _parse_published(raw_text)
     category = _SOURCE_CATEGORY.get(raw.content_type or "", "general") if raw.content_type else "general"
