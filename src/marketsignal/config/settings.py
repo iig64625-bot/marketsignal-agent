@@ -56,6 +56,17 @@ class Settings(BaseSettings):
     unsupported_claim_target: float = 0.1
 
 
+    # HTTP / CORS
+    # WARNING: never combine `cors_origins=["*"]` with `allow_credentials=True`
+    # — browsers reject the response. This allowlist is the safe default for
+    # local Streamlit + React dev. Override via the CORS_ORIGINS env var
+    # (JSON array, e.g. '["http://localhost:8501"]').
+    cors_origins: list[str] = [
+        "http://localhost:8501",  # Streamlit
+        "http://localhost:3000",  # next.js / react
+        "http://127.0.0.1:8501",
+        "http://127.0.0.1:3000",
+    ]
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
