@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from marketsignal.evals.rag_eval import (
+from signalpulse.evals.rag_eval import (
     DEFAULT_GOLD_PATH,
     GoldItem,
     _fallback_retrieve,

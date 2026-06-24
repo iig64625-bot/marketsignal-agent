@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛰️ MarketSignal Agent
+# 🛰️ SignalPulse
 
 **面向产品、市场与销售团队的 AI 竞品情报与市场信号分析 Agent**
 
@@ -35,7 +35,7 @@
 - 没有来源的结论不可信，没人会真的拿去用
 - 同样的事下周还要再做一遍
 
-**MarketSignal Agent** 把这件事自动化：
+**SignalPulse** 把这件事自动化：
 
 > 主动采集竞品公开信号 → 结构化抽取 → 识别市场信号 → 生成周报 + Battlecard → 校验每条结论的引用证据 → 输出 Eval 指标
 
@@ -144,8 +144,8 @@
 ### 1. 克隆与安装
 
 ```bash
-git clone https://github.com/<your-username>/marketsignal-agent.git
-cd marketsignal-agent
+git clone https://github.com/<your-username>/signalpulse-agent.git
+cd signalpulse-agent
 
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
@@ -211,7 +211,7 @@ marketsignal run --use-sample-dataset
 ## 📁 项目结构
 
 ```
-marketsignal-agent/
+signalpulse-agent/
 ├── README.md
 ├── README_CN.md
 ├── pyproject.toml

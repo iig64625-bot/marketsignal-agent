@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from marketsignal.ingestion.fetch_rss import fetch_rss
+from signalpulse.ingestion.fetch_rss import fetch_rss
 
 RSS_FIXTURE = b"""<?xml version=\"1.0\"?>
 <rss version=\"2.0\"><channel>

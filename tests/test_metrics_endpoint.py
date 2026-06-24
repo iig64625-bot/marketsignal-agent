@@ -6,8 +6,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from marketsignal.api.app import create_app
-from marketsignal.utils.tracing import (
+from signalpulse.api.app import create_app
+from signalpulse.utils.tracing import (
     TRACE_DIR,
     finish_trace,
     get_metrics,
@@ -18,10 +18,10 @@ from marketsignal.utils.tracing import (
 @pytest.fixture
 def client(tmp_data_dir: str) -> TestClient:
     """Build a TestClient with an isolated SQLite DB and trace dir."""
-    import marketsignal.models  # noqa: F401
-    from marketsignal.db.engine import get_engine
-    from marketsignal.db.session import reset_session_factory
-    from marketsignal.models.base import Base
+    import signalpulse.models  # noqa: F401
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
 
     reset_session_factory()
     Base.metadata.create_all(get_engine())

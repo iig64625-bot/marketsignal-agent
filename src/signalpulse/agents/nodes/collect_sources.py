@@ -1,0 +1,31 @@
+"""Node: fetch all sources and persist RawDocument rows."""
+from __future__ import annotations
+
+from loguru import logger
+
+from signalpulse.agents.state import GraphState
+from signalpulse.db.session import get_session
+from signalpulse.ingestion.router import fetch_source
+from signalpulse.models.source import Source
+from signalpulse.utils.tracing import trace_node
+
+
+@trace_node("collect_sources_node")
+async def collect_sources_node(state: GraphState) -> GraphState:
+    run_id = state["run_id"]
+    source_ids = state.get("source_ids", [])
+    warnings = list(state.get("warnings", []))
+    raw_ids: list[str] = []
+    with get_session() as s:
+        sources = s.query(Source).filter(Source.id.in_(source_ids)).all() if source_ids else []
+        for src in sources:
+            try:
+                raws = await fetch_source(src, run_id)
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(f"fetch failed for source {src.id}: {exc}")
+                logger.warning("collect_sources: source={} err={}", src.id, exc)
+                continue
+            for r in raws:
+                s.add(r)
+                raw_ids.append(r.id)
+    return {"raw_document_ids": raw_ids, "warnings": warnings}

@@ -1,11 +1,11 @@
-# MarketSignal Agent — Demo 输出样例
+# SignalPulse — Demo 输出样例
 
-> 本文用文字"截图"展示 sample pipeline 的真实输出。所有内容都可以用 `python -m marketsignal run --use-sample-dataset` 现场复现。
+> 本文用文字"截图"展示 sample pipeline 的真实输出。所有内容都可以用 `python -m signalpulse run --use-sample-dataset` 现场复现。
 
 ## 1. CLI 运行输出
 
 ```text
-$ python -m marketsignal run --use-sample-dataset
+$ python -m signalpulse run --use-sample-dataset
 
 16:48:02.811 | INFO  | __main__:main:28 - Starting pipeline: config=configs/competitors.ai-agent.yaml, sample_dataset=True
 16:48:02.811 | INFO  | marketsignal.agents.nodes.load_sample:load_sample_node:34 - load_sample: inserted 9 events + 9 signals
@@ -101,7 +101,7 @@ _(no LLM-generated attack points; enable an LLM provider for richer cards)_
 _(citations populated by Phase 6)_
 ```
 
-> **开启 LLM 后**（配 `OPENAI_API_KEY` 跑 `python -m marketsignal run`），"Attack Points" 一节会变成：
+> **开启 LLM 后**（配 `OPENAI_API_KEY` 跑 `python -m signalpulse run`），"Attack Points" 一节会变成：
 >
 > ```markdown
 > ## Attack Points
@@ -167,8 +167,8 @@ _(citations populated by Phase 6)_
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  ⚙️ MarketSignal                       ┌──────────────────────────┐  │
-│  AI Competitive Intelligence           │   MarketSignal Agent     │  │
+│  ⚙️ SignalPulse                       ┌──────────────────────────┐  │
+│  AI Competitive Intelligence           │   SignalPulse     │  │
 │                                        │   ──────────────         │  │
 │  Run                                    │                          │  │
 │  Competitor config: [ai-agent.yaml ▼]   │  AI Competitive          │  │
@@ -205,7 +205,7 @@ _(citations populated by Phase 6)_
 **现场复现步骤**：
 ```bash
 # 1. 跑 sample pipeline
-python -m marketsignal run --use-sample-dataset
+python -m signalpulse run --use-sample-dataset
 
 # 2. 启动 API
 uvicorn marketsignal.api.app:create_app --factory

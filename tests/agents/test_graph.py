@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from marketsignal.agents.graph import build_pipeline
-from marketsignal.agents.state import GraphState
+from signalpulse.agents.graph import build_pipeline
+from signalpulse.agents.state import GraphState
 
 EXPECTED_NODES = {
     "load_config",

@@ -3,13 +3,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from marketsignal.agents.nodes.analyze_signals import (
+from signalpulse.agents.nodes.analyze_signals import (
     MAX_EVENTS_PER_COMPETITOR,
     MAX_SUMMARY_CHARS,
     MAX_TITLE_CHARS,
     _build_prompt,
 )
-from marketsignal.models.event import Event
+from signalpulse.models.event import Event
 
 
 def _mk_event(i: int, *, title: str = "T", summary: str = "S") -> Event:

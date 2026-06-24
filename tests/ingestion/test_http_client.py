@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from marketsignal.ingestion.http_client import FetchError, HttpClient, checksum_bytes
+from signalpulse.ingestion.http_client import FetchError, HttpClient, checksum_bytes
 
 
 def test_checksum_bytes_is_sha256_hex():

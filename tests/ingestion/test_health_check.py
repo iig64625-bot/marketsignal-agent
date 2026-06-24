@@ -1,6 +1,6 @@
 import pytest
 
-from marketsignal.ingestion.health_check import SourceHealth, summarize
+from signalpulse.ingestion.health_check import SourceHealth, summarize
 
 
 def test_source_health_default_badge_red():
@@ -50,7 +50,7 @@ def test_summarize_empty():
 
 @pytest.mark.asyncio
 async def test_check_source_health_unreachable():
-    from marketsignal.ingestion.health_check import check_source_health
+    from signalpulse.ingestion.health_check import check_source_health
     # Port 1 should not be listening; even a 502 from a proxy still marks the source as not-reachable.
     h = await check_source_health("http://127.0.0.1:1", source_type="website")
     assert h.reachable is False

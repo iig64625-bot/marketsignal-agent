@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from marketsignal.config.loader import (
+from signalpulse.config.loader import (
     CompetitorConfig,
     PipelineConfig,
     SourceConfig,

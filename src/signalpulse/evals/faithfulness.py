@@ -1,0 +1,101 @@
+"""Summary faithfulness: how well a generated summary reflects the source.
+
+Combines a fast keyword-overlap signal (deterministic, no LLM needed) with an
+optional LLM judgement for higher fidelity when a key is configured.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+from loguru import logger
+
+from signalpulse.utils.llm import get_llm
+
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]+")
+_STOPWORDS = {"the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "is", "are", "with", "this", "that"}
+
+
+def _tokenize(text: str) -> set[str]:
+    if not isinstance(text, str):
+        return set()
+    return {t.lower() for t in _WORD_RE.findall(text) if len(t) > 3 and t.lower() not in _STOPWORDS}
+
+
+def keyword_overlap_score(summary: str, source: str) -> float:
+    """Return Jaccard overlap in [0, 1] between ``summary`` and ``source`` tokens."""
+    a = _tokenize(summary)
+    b = _tokenize(source)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def llm_judge_score(summary: str, source: str) -> float | None:
+    """Ask the LLM to grade the summary in [0, 1]. Returns ``None`` if no LLM is configured."""
+    from signalpulse.models.schemas import FaithfulnessCheck  # local import avoids cycles
+    try:
+        llm = get_llm()
+    except ValueError as exc:
+        logger.info("faithfulness: LLM unavailable, skipping: {}", exc)
+        return None
+    structured = llm.with_structured_output(FaithfulnessCheck)
+    snippet = source[:3000]
+    try:
+        result: FaithfulnessCheck = structured.invoke(
+            [
+                {
+                    "role": "system",
+                    "content": "You are a strict evaluator. Score how faithfully the SUMMARY reflects the SOURCE in [0, 1]. Penalize hallucinations and unsupported claims.",
+                },
+                {
+                    "role": "user",
+                    "content": f"SOURCE:\n{snippet}\n\nSUMMARY:\n{summary[:1500]}\n\nReturn JSON {{score, notes}}.",
+                },
+            ]
+        )
+        score = float(result.score)
+        return max(0.0, min(1.0, score))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("faithfulness: LLM call failed: {}", exc)
+        return None
+
+
+@dataclass
+class FaithfulnessResult:
+    """Combined faithfulness score and the signals behind it."""
+
+    score: float
+    keyword_overlap: float
+    llm_score: float | None
+    notes: str = ""
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "score": self.score,
+            "keyword_overlap": self.keyword_overlap,
+            "llm_score": self.llm_score,
+            "notes": self.notes,
+        }
+
+
+def faithfulness_score(summary: str, source: str) -> FaithfulnessResult:
+    """Compute the combined faithfulness score.
+
+    When no LLM is available the result is just the keyword overlap; otherwise
+    the final score is a weighted blend (0.4 keyword + 0.6 LLM).
+    """
+    overlap = keyword_overlap_score(summary, source)
+    llm = llm_judge_score(summary, source)
+    if llm is None:
+        return FaithfulnessResult(score=overlap, keyword_overlap=overlap, llm_score=None, notes="deterministic only")
+    blended = 0.4 * overlap + 0.6 * llm
+    return FaithfulnessResult(score=blended, keyword_overlap=overlap, llm_score=llm, notes="blended 0.4*overlap + 0.6*llm")
+
+
+__all__ = [
+    "FaithfulnessResult",
+    "faithfulness_score",
+    "keyword_overlap_score",
+    "llm_judge_score",
+]

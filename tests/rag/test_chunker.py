@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from marketsignal.models.base import new_id
-from marketsignal.models.normalized_document import NormalizedDocument
-from marketsignal.rag.chunker import _count_tokens, chunk_document
+from signalpulse.models.base import new_id
+from signalpulse.models.normalized_document import NormalizedDocument
+from signalpulse.rag.chunker import _count_tokens, chunk_document
 
 
 def _make_doc(text: str) -> NormalizedDocument:

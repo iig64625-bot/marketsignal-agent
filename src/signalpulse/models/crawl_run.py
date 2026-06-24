@@ -1,0 +1,21 @@
+﻿from __future__ import annotations
+
+import datetime as _dt
+
+from sqlalchemy import DateTime, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from signalpulse.models.base import Base, new_id
+
+
+class CrawlRun(Base):
+    __tablename__ = "crawl_runs"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=new_id)
+    started_at: Mapped[_dt.datetime] = mapped_column(DateTime, nullable=False)
+    finished_at: Mapped[_dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    triggered_by: Mapped[str] = mapped_column(String(64), nullable=False, default="cli")
+    time_window_start: Mapped[_dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    time_window_end: Mapped[_dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(2048), nullable=True)

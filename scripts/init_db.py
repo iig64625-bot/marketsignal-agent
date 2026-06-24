@@ -1,4 +1,4 @@
-"""Initialize the MarketSignal database and (optionally) load the sample dataset.
+"""Initialize the SignalPulse database and (optionally) load the sample dataset.
 
 Usage:
     python scripts/init_db.py                # create tables only
@@ -17,16 +17,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from loguru import logger
 
-from marketsignal.config.settings import get_settings  # noqa: E402
-from marketsignal.db.engine import get_engine  # noqa: E402
-from marketsignal.db.session import get_session, reset_session_factory  # noqa: E402
+from signalpulse.config.settings import get_settings  # noqa: E402
+from signalpulse.db.engine import get_engine  # noqa: E402
+from signalpulse.db.session import get_session, reset_session_factory  # noqa: E402
 
 
 def _create_all_tables() -> None:
     """Create every table declared on the ORM metadata."""
     # Import models so they are registered with the Base metadata.
-    import marketsignal.models  # noqa: F401
-    from marketsignal.models.base import Base
+    import signalpulse.models  # noqa: F401
+    from signalpulse.models.base import Base
 
     Base.metadata.create_all(get_engine())
     logger.info("init_db: created all tables on {}", get_settings().database_url)
@@ -34,8 +34,8 @@ def _create_all_tables() -> None:
 
 def _drop_all_tables() -> None:
     """Drop every table (use with caution)."""
-    import marketsignal.models  # noqa: F401
-    from marketsignal.models.base import Base
+    import signalpulse.models  # noqa: F401
+    from signalpulse.models.base import Base
 
     Base.metadata.drop_all(get_engine())
     logger.warning("init_db: dropped all tables on {}", get_settings().database_url)
@@ -43,14 +43,14 @@ def _drop_all_tables() -> None:
 
 def _load_sample_dataset() -> None:
     """Insert the bundled sample events and signals so the dashboard has data."""
-    from marketsignal.services.sample_loader import load_sample_dataset
+    from signalpulse.services.sample_loader import load_sample_dataset
 
     load_sample_dataset()
     logger.info("init_db: sample dataset loaded")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Initialize the MarketSignal database.")
+    parser = argparse.ArgumentParser(description="Initialize the SignalPulse database.")
     parser.add_argument("--with-sample", action="store_true", help="Also load the sample dataset.")
     parser.add_argument(
         "--reset",

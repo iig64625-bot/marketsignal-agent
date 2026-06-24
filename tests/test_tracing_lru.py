@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-import marketsignal.utils.tracing as tracing_mod
-from marketsignal.utils.tracing import (
+import signalpulse.utils.tracing as tracing_mod
+from signalpulse.utils.tracing import (
     _MAX_AGE_SECONDS,
     _MAX_ENTRIES,
     _drop_locked,

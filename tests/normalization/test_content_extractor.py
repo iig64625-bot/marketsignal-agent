@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from marketsignal.models.base import new_id
-from marketsignal.models.normalized_document import NormalizedDocument
-from marketsignal.models.raw_document import RawDocument
-from marketsignal.normalization.content_extractor import extract_content
+from signalpulse.models.base import new_id
+from signalpulse.models.normalized_document import NormalizedDocument
+from signalpulse.models.raw_document import RawDocument
+from signalpulse.normalization.content_extractor import extract_content
 
 
 def test_extract_content_reads_raw_html(tmp_path):

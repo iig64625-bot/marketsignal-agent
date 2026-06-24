@@ -12,9 +12,9 @@ import datetime as _dt
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from marketsignal.db.engine import get_engine
-from marketsignal.db.session import _get_factory, get_session, reset_session_factory
-from marketsignal.models import (
+from signalpulse.db.engine import get_engine
+from signalpulse.db.session import _get_factory, get_session, reset_session_factory
+from signalpulse.models import (
     Base,
     Company,
     CrawlRun,

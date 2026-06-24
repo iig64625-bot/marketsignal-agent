@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from marketsignal.ingestion.fetch_webpage import fetch_webpage
+from signalpulse.ingestion.fetch_webpage import fetch_webpage
 
 
 def _make_response(url: str, body: bytes, content_type: str = "text/html") -> httpx.Response:
@@ -23,7 +23,7 @@ def _make_response(url: str, body: bytes, content_type: str = "text/html") -> ht
 @pytest.mark.asyncio
 async def test_fetch_webpage_persists_raw_html(tmp_path):
     body = b"<html><body>hi</body></html>"
-    with patch("marketsignal.ingestion.fetch_webpage.HttpClient") as ClientMock:
+    with patch("signalpulse.ingestion.fetch_webpage.HttpClient") as ClientMock:
         instance = ClientMock.return_value
         instance.__aenter__ = AsyncMock(return_value=instance)  # type: ignore[method-assign]
         instance.__aexit__ = AsyncMock(return_value=False)  # type: ignore[method-assign]

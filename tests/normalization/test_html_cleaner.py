@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from marketsignal.normalization.html_cleaner import clean_html
+from signalpulse.normalization.html_cleaner import clean_html
 
 
 def test_clean_html_strips_scripts_and_nav():

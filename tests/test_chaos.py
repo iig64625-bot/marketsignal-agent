@@ -1,4 +1,4 @@
-"""Chaos / failure-mode tests for the MarketSignal pipeline.
+"""Chaos / failure-mode tests for the SignalPulse pipeline.
 
 These tests inject controlled failures into the LLM, network, and DB
 layers and verify that the pipeline degrades gracefully rather than
@@ -13,12 +13,12 @@ from typing import Any
 import httpx
 import pytest
 
-from marketsignal.agents.graph import build_pipeline
-from marketsignal.citation.checker import (
+from signalpulse.agents.graph import build_pipeline
+from signalpulse.citation.checker import (
     _deterministic_support,
 )
-from marketsignal.models.base import new_id
-from marketsignal.utils.retry import retry_with_backoff_async
+from signalpulse.models.base import new_id
+from signalpulse.utils.retry import retry_with_backoff_async
 
 # ----------------------------- retry layer ------------------------------------
 
@@ -159,7 +159,7 @@ async def test_pipeline_does_not_crash_on_node_warning() -> None:
 @pytest.mark.asyncio
 async def test_analyze_signals_survives_malformed_llm_output(monkeypatch) -> None:
     """analyze_signals should append a warning and continue, not raise."""
-    from marketsignal.agents.nodes import analyze_signals
+    from signalpulse.agents.nodes import analyze_signals
 
     def broken_invoke(*args: Any, **kwargs: Any) -> None:
         raise ValueError("LLM returned unparseable garbage")
@@ -184,10 +184,10 @@ async def test_analyze_signals_survives_malformed_llm_output(monkeypatch) -> Non
 @pytest.mark.asyncio
 async def test_extract_events_survives_bad_json(monkeypatch) -> None:
     """extract_events should return [] on unparseable LLM output, not raise."""
-    from marketsignal.events import (
+    from signalpulse.events import (
         extractor as extract_events,  # real module; agents.nodes is a thin re-export
     )
-    from marketsignal.models.normalized_document import NormalizedDocument
+    from signalpulse.models.normalized_document import NormalizedDocument
 
     class FakeStructured:
         async def ainvoke(self, *args: Any, **kwargs: Any) -> None:
@@ -214,10 +214,10 @@ async def test_extract_events_survives_bad_json(monkeypatch) -> None:
 
 def test_db_session_rolls_back_on_exception(tmp_data_dir) -> None:
     """If a session raises mid-transaction, the session should rollback (no half-state)."""
-    from marketsignal.db.engine import get_engine
-    from marketsignal.db.session import get_session
-    from marketsignal.models.base import Base
-    from marketsignal.models.crawl_run import CrawlRun
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import get_session
+    from signalpulse.models.base import Base
+    from signalpulse.models.crawl_run import CrawlRun
 
     Base.metadata.create_all(get_engine())
 
@@ -232,9 +232,9 @@ def test_db_session_rolls_back_on_exception(tmp_data_dir) -> None:
     assert raised, "exception should have propagated"
 
     # The failed row should NOT be visible from a new session (rollback worked)
-    from marketsignal.db.session import get_session as _gs2
+    from signalpulse.db.session import get_session as _gs2
     with _gs2() as s:
-        from marketsignal.models.crawl_run import CrawlRun as CR
+        from signalpulse.models.crawl_run import CrawlRun as CR
         assert s.get(CR, "x") is None, "rollback failed: row leaked"
 
 
@@ -244,7 +244,7 @@ def test_db_session_rolls_back_on_exception(tmp_data_dir) -> None:
 @pytest.mark.asyncio
 async def test_http_client_raises_fetch_error_after_exhausted_retries(tmp_data_dir) -> None:
     """A persistently unreachable URL should raise FetchError, not hang."""
-    from marketsignal.ingestion.http_client import FetchError, HttpClient
+    from signalpulse.ingestion.http_client import FetchError, HttpClient
 
     with pytest.raises(FetchError):
         async with HttpClient(max_retries=2) as client:
@@ -257,7 +257,7 @@ async def test_http_client_raises_fetch_error_after_exhausted_retries(tmp_data_d
 
 def test_scheduler_rejects_bad_cron() -> None:
     """A 4-field cron should be rejected at construction time."""
-    from marketsignal.scheduler import _parse_cron
+    from signalpulse.scheduler import _parse_cron
     with pytest.raises(ValueError, match="5 fields"):
         _parse_cron("*/5 * * *")  # only 4 fields
     with pytest.raises(ValueError, match="5 fields"):

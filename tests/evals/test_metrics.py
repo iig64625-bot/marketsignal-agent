@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from marketsignal.evals.citation_coverage import citation_coverage
-from marketsignal.evals.dedup_rate import dedup_rate
-from marketsignal.evals.token_cost import token_cost
-from marketsignal.evals.unsupported_claims import unsupported_claim_rate
-from marketsignal.models.claim import Claim
-from marketsignal.models.normalized_document import NormalizedDocument
+from signalpulse.evals.citation_coverage import citation_coverage
+from signalpulse.evals.dedup_rate import dedup_rate
+from signalpulse.evals.token_cost import token_cost
+from signalpulse.evals.unsupported_claims import unsupported_claim_rate
+from signalpulse.models.claim import Claim
+from signalpulse.models.normalized_document import NormalizedDocument
 
 
 def _claim(supported: bool) -> Claim:

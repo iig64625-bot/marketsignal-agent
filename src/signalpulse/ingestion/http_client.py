@@ -1,0 +1,128 @@
+"""Async HTTP client with retries and rate limiting."""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import time
+from typing import Any
+
+import httpx
+from loguru import logger
+
+from signalpulse.config.settings import get_settings
+from signalpulse.utils.retry import DEFAULT_RETRYABLE, retry_with_backoff_async
+
+
+class FetchError(RuntimeError):
+    """Raised when a fetch operation fails after exhausting retries."""
+
+
+class HttpClient:
+    """Thin async wrapper around :class:`httpx.AsyncClient` with retry + rate limit."""
+
+    def __init__(
+        self,
+        *,
+        timeout: int | None = None,
+        max_retries: int | None = None,
+        rate_limit_per_sec: float | None = None,
+        user_agent: str | None = None,
+    ) -> None:
+        s = get_settings()
+        self._timeout = timeout or s.http_timeout
+        self._max_retries = max_retries or s.http_max_retries
+        self._rate_limit = rate_limit_per_sec or s.http_rate_limit_per_sec
+        self._user_agent = user_agent or s.user_agent
+        self._sem = asyncio.Semaphore(max(1, int(self._rate_limit * 2)))
+        self._last_request = 0.0
+        self._min_interval = 1.0 / max(self._rate_limit, 0.001)
+        self._client: httpx.AsyncClient | None = None
+
+    async def __aenter__(self) -> HttpClient:
+        self._client = httpx.AsyncClient(
+            timeout=self._timeout,
+            headers={"User-Agent": self._user_agent},
+            follow_redirects=True,
+        )
+        return self
+
+    async def __aexit__(self, *exc: Any) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def fetch(self, url: str) -> httpx.Response:
+        """Fetch ``url`` with retries and a soft rate limit.
+
+        Honors ``Retry-After`` for 429 / 503 responses by sleeping the
+        requested number of seconds before retrying.
+        """
+        if self._client is None:
+            raise FetchError("HttpClient must be used as an async context manager")
+
+        async def _do_request() -> httpx.Response:
+            async with self._sem:
+                await self._pace()
+                response = await self._client.get(url)
+                if response.status_code in (429, 503):
+                    # raise so the retry helper sees it as transient
+                    raise httpx.HTTPStatusError(
+                        f"{response.status_code} {url}",
+                        request=response.request,
+                        response=response,
+                    )
+                response.raise_for_status()
+                return response
+
+        try:
+            return await retry_with_backoff_async(
+                _do_request,
+                max_retries=self._max_retries,
+                base_delay=0.5,
+                max_delay=10.0,
+                retryable=DEFAULT_RETRYABLE + (httpx.TransportError, httpx.HTTPError, httpx.HTTPStatusError),
+                on_retry=self._maybe_wait_retry_after,
+            )
+        except httpx.HTTPStatusError as exc:
+            raise FetchError(
+                f"failed to fetch {url} after retries: status={exc.response.status_code}"
+            ) from exc
+        except (httpx.TransportError, httpx.HTTPError) as exc:
+            raise FetchError(f"failed to fetch {url} after retries: {exc}") from exc
+
+    def _maybe_wait_retry_after(self, attempt: int, exc: BaseException, default_delay: float) -> None:
+        """If ``exc`` carries a ``Retry-After`` header, sleep that long instead."""
+        resp = getattr(exc, "response", None)
+        if resp is None:
+            return
+        ra = resp.headers.get("Retry-After")
+        if not ra:
+            return
+        try:
+            wait_s = float(ra)
+        except ValueError:
+            # HTTP date format - take a conservative 5s
+            wait_s = 5.0
+        wait_s = min(wait_s, 30.0)  # cap to avoid pathological servers
+        logger.info("429/503 Retry-After: sleeping {}s for {}", wait_s, resp.url)
+        time.sleep(wait_s)
+
+    async def fetch_bytes(self, url: str) -> bytes:
+        response = await self.fetch(url)
+        return response.content
+
+    async def fetch_text(self, url: str) -> str:
+        response = await self.fetch(url)
+        return response.text
+
+    async def _pace(self) -> None:
+        now = time.monotonic()
+        wait = self._min_interval - (now - self._last_request)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        self._last_request = time.monotonic()
+
+
+def checksum_bytes(data: bytes) -> str:
+    """Return the hex sha256 of ``data`` (used for ``raw_documents.checksum``)."""
+    return hashlib.sha256(data).hexdigest()

@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "marketsignal-agent"
+name = "signalpulse-agent"
 version = "0.1.0"
 description = "AI Competitive Intelligence & Market Signal Analyst"
 readme = "README.md"
@@ -91,4 +91,4 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 # FastAPI pattern: ``Depends()`` is meant to be in argument defaults.
-"src/marketsignal/api/**" = ["B008"]
+"src/signalpulse/api/**" = ["B008"]

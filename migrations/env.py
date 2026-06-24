@@ -10,8 +10,8 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from marketsignal.config.settings import get_settings
-from marketsignal.models import Base
+from signalpulse.config.settings import get_settings
+from signalpulse.models import Base
 
 config = context.config
 

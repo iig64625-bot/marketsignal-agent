@@ -1,10 +1,10 @@
-﻿# MarketSignal Agent — System Architecture
+﻿# SignalPulse — System Architecture
 
 > 本文是 `D:\新项目\PROJECT_PLAN.md` 中 Phase 10 / Task 10.1 的交付物，描述系统的分层结构、模块依赖、数据流和部署形态。
 
 ## 1. 设计目标
 
-MarketSignal Agent 是一个面向产品/市场/销售团队的 **AI 竞品情报系统**。它的核心难点不是"用 LLM 生成文本"，而是：
+SignalPulse 是一个面向产品/市场/销售团队的 **AI 竞品情报系统**。它的核心难点不是"用 LLM 生成文本"，而是：
 
 1. **数据真伪可控** — 每条结论必须能回溯到原始 URL，否则不可信
 2. **多源异构** — 官网 / Blog / Changelog / GitHub / 招聘页 / 定价页，每种源结构不同
@@ -23,7 +23,7 @@ flowchart TB
     end
 
     subgraph CLI["CLI Entry"]
-        C1[python -m marketsignal.cli]
+        C1[python -m signalpulse.cli]
     end
 
     subgraph Ingest["1. Ingestion"]

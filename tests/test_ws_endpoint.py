@@ -10,18 +10,18 @@ import datetime as _dt
 import pytest
 from fastapi.testclient import TestClient
 
-from marketsignal.api.app import create_app
-from marketsignal.models.crawl_run import CrawlRun
-from marketsignal.utils.tracing import finish_trace, start_trace
+from signalpulse.api.app import create_app
+from signalpulse.models.crawl_run import CrawlRun
+from signalpulse.utils.tracing import finish_trace, start_trace
 
 
 @pytest.fixture
 def client(tmp_data_dir: str) -> TestClient:
     """Build a TestClient with an isolated SQLite DB."""
-    import marketsignal.models  # noqa: F401
-    from marketsignal.db.engine import get_engine
-    from marketsignal.db.session import reset_session_factory
-    from marketsignal.models.base import Base
+    import signalpulse.models  # noqa: F401
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
 
     reset_session_factory()
     Base.metadata.create_all(get_engine())
@@ -30,7 +30,7 @@ def client(tmp_data_dir: str) -> TestClient:
 
 def _create_run(run_id: str) -> None:
     """Insert a CrawlRun row so /ws/runs/{run_id} can find it."""
-    from marketsignal.db.session import get_session
+    from signalpulse.db.session import get_session
 
     with get_session() as s:
         s.add(
@@ -107,7 +107,7 @@ def test_ws_streams_new_spans(client: TestClient) -> None:
 
 def test_new_spans_since_helper() -> None:
     """Unit test: the new-span filter skips running spans and starts at the right index."""
-    from marketsignal.api.routes.ws import _parse_new_spans
+    from signalpulse.api.routes.ws import _parse_new_spans
 
     payload = {
         "spans": [
@@ -125,7 +125,7 @@ def test_new_spans_since_helper() -> None:
 
 def test_run_monitor_component_contains_websocket_js() -> None:
     """The Streamlit live-monitor component embeds a WebSocket client."""
-    from marketsignal.ui.components.run_monitor import _LIVE_RUN_HTML
+    from signalpulse.ui.components.run_monitor import _LIVE_RUN_HTML
 
     assert "new WebSocket" in _LIVE_RUN_HTML
     assert "/ws/runs/" in _LIVE_RUN_HTML

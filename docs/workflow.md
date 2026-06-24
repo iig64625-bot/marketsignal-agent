@@ -55,11 +55,11 @@ stateDiagram-v2
 ```powershell
 # 跑 sample 看完整 trace
 $env:PYTHONPATH = "src"
-python -m marketsignal.cli run --use-sample-dataset
+python -m signalpulse.cli run --use-sample-dataset
 
 # 想看每个节点的输入输出，把 log level 调到 DEBUG
 $env:LOGURU_LEVEL = "DEBUG"
-python -m marketsignal.cli run --use-sample-dataset
+python -m signalpulse.cli run --use-sample-dataset
 ```
 
 详细分层与设计理由见 [`docs/architecture.md`](./architecture.md)。

@@ -1,0 +1,26 @@
+﻿from __future__ import annotations
+
+from sqlalchemy import Float, ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from signalpulse.models.base import Base, TimestampMixin, new_id
+
+
+class Signal(Base, TimestampMixin):
+    __tablename__ = "signals"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=new_id)
+    crawl_run_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("crawl_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    company_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    signal_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    finding: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    analysis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    recommendation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
+    supporting_event_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    supporting_document_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

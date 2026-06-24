@@ -1,7 +1,7 @@
-﻿# MarketSignal Agent — Architecture Decision Records (ADRs)
+﻿# SignalPulse — Architecture Decision Records (ADRs)
 
 This document captures the **why** behind the non-obvious technical
-choices in MarketSignal Agent. Each entry follows the classic
+choices in SignalPulse. Each entry follows the classic
 "Context / Decision / Consequences" pattern, which is the same one used
 by the [AWS ADR template](https://docs.aws.amazon.com/prescriptive-guidance/latest/architectural-decision-records/adr-process.html)
 and the [Microsoft ADR lessons learned](https://learn.microsoft.com/en-us/azure/architecture/architectural-decision-records/recording-architectural-decisions).
@@ -82,7 +82,7 @@ need a way to mark a claim as supported even when the LLM drops the
 citation, *and* a way to mark a claim as unsupported even when the LLM
 swears it cited something.
 
-**Decision.** Add `marketsignal.citation.checker.check_report_citations`
+**Decision.** Add `signalpulse.citation.checker.check_report_citations`
 that runs after report generation. For every `Claim`, it does a
 deterministic keyword overlap check between the claim text and the
 corpus of normalized documents. Claims with zero overlap are flagged
@@ -139,7 +139,7 @@ project.
 **Decision.** Expose two entry points that share the same DB and
 the same pipeline code:
 
-1. `python -m marketsignal run ...` — synchronous CLI. Spins up a
+1. `python -m signalpulse run ...` — synchronous CLI. Spins up a
    fresh pipeline per invocation.
 2. `uvicorn marketsignal.api.app:create_app --factory` — FastAPI
    server. The `POST /runs` route kicks the pipeline off in a
@@ -222,7 +222,7 @@ a JSON blob inside the trace file. Expose via `GET /metrics/{run_id}`.
 
 * (+) One file, no extra deps, no exporter config.
 * (+) Token cost can use the project's own price table
-  (`marketsignal.evals.token_cost`), so a model swap is one line.
+  (`signalpulse.evals.token_cost`), so a model swap is one line.
 * (-) No histograms, no Prometheus scraping, no Grafana dashboards.
   If we need those later, we add a `RunMetricsExporter` that reads
   the same JSON blob.

@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from marketsignal.config.settings import get_settings
-from marketsignal.utils.llm import get_llm
+from signalpulse.config.settings import get_settings
+from signalpulse.utils.llm import get_llm
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ def test_qwen_uses_dashscope_base_url(monkeypatch):
     monkeypatch.setenv("QWEN_API_KEY", "test-key")
     monkeypatch.setenv("LLM_PROVIDER", "qwen")
     monkeypatch.setenv("LLM_MODEL", "qwen-plus")
-    with patch("marketsignal.utils.llm.ChatOpenAI") as mock:
+    with patch("signalpulse.utils.llm.ChatOpenAI") as mock:
         get_llm()
     kwargs = mock.call_args.kwargs
     assert kwargs["api_key"] == "test-key"
@@ -45,7 +45,7 @@ def test_qwen_uses_dashscope_base_url(monkeypatch):
 def test_ollama_uses_local_base_url(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("LLM_MODEL", "llama3")
-    with patch("marketsignal.utils.llm.ChatOpenAI") as mock:
+    with patch("signalpulse.utils.llm.ChatOpenAI") as mock:
         get_llm()
     kwargs = mock.call_args.kwargs
     assert kwargs["base_url"] == "http://localhost:11434/v1"
@@ -56,7 +56,7 @@ def test_custom_uses_llm_base_url(monkeypatch):
     monkeypatch.setenv("LLM_BASE_URL", "https://my-llm.example.com/v1")
     monkeypatch.setenv("LLM_API_KEY", "custom-key")
     monkeypatch.setenv("LLM_MODEL", "my-model")
-    with patch("marketsignal.utils.llm.ChatOpenAI") as mock:
+    with patch("signalpulse.utils.llm.ChatOpenAI") as mock:
         get_llm()
     kwargs = mock.call_args.kwargs
     assert kwargs["base_url"] == "https://my-llm.example.com/v1"
@@ -73,7 +73,7 @@ def test_provider_override_wins(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "real-key")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("QWEN_API_KEY", "qwen-key")
-    with patch("marketsignal.utils.llm.ChatOpenAI") as mock:
+    with patch("signalpulse.utils.llm.ChatOpenAI") as mock:
         get_llm(provider="qwen", model="qwen-turbo")
     kwargs = mock.call_args.kwargs
     assert kwargs["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"

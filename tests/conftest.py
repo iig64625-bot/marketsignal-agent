@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from marketsignal.config.settings import get_settings
-from marketsignal.db.engine import get_engine
-from marketsignal.db.session import _get_factory, reset_session_factory
+from signalpulse.config.settings import get_settings
+from signalpulse.db.engine import get_engine
+from signalpulse.db.session import _get_factory, reset_session_factory
 
 
 @pytest.fixture
@@ -70,9 +70,9 @@ def _ensure_db_tables_once() -> None:
     import os
 
     os.environ.setdefault("DATABASE_URL", "sqlite:///./_test_session.db")
-    from marketsignal.db.engine import get_engine
-    from marketsignal.db.session import reset_session_factory
-    from marketsignal.models.base import Base
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
 
     reset_session_factory()
     Base.metadata.create_all(get_engine())

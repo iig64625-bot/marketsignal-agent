@@ -1,0 +1,21 @@
+"""Node: mark the crawl run as completed and emit the final status."""
+from __future__ import annotations
+
+from signalpulse.agents.state import GraphState
+from signalpulse.db.session import get_session
+from signalpulse.models.base import utcnow
+from signalpulse.models.crawl_run import CrawlRun
+from signalpulse.utils.tracing import finish_trace, trace_node
+
+
+@trace_node("finalize_node")
+async def finalize_node(state: GraphState) -> GraphState:
+    run_id = state.get("run_id")
+    if run_id:
+        with get_session() as s:
+            run = s.get(CrawlRun, run_id)
+            if run is not None:
+                run.status = "completed"
+                run.finished_at = utcnow()
+        finish_trace(run_id, status="completed")
+    return {"status": "completed"}

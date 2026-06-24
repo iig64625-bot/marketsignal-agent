@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from marketsignal.citation.checker import (
+from signalpulse.citation.checker import (
     _deterministic_support,
     _split_claims_from_markdown,
     compute_citation_metrics,
 )
-from marketsignal.models.claim import Claim
+from signalpulse.models.claim import Claim
 
 
 def test_split_claims_filters_headings_and_placeholders():

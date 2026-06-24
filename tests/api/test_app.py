@@ -7,19 +7,19 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from marketsignal.api.app import create_app
-from marketsignal.models.base import new_id
-from marketsignal.models.crawl_run import CrawlRun
-from marketsignal.models.report import Report
+from signalpulse.api.app import create_app
+from signalpulse.models.base import new_id
+from signalpulse.models.crawl_run import CrawlRun
+from signalpulse.models.report import Report
 
 
 @pytest.fixture
 def client(tmp_data_dir: str) -> TestClient:
     """Build a TestClient with an isolated SQLite DB."""
-    import marketsignal.models  # noqa: F401  (register models)
-    from marketsignal.db.engine import get_engine
-    from marketsignal.db.session import reset_session_factory
-    from marketsignal.models.base import Base
+    import signalpulse.models  # noqa: F401  (register models)
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
 
     reset_session_factory()
     Base.metadata.create_all(get_engine())
@@ -72,7 +72,7 @@ def test_get_report_not_found(client: TestClient) -> None:
 
 def test_create_run_returns_202_and_persists(client: TestClient) -> None:
     """``POST /runs`` returns 202 and creates a pending :class:`CrawlRun` row."""
-    with patch("marketsignal.api.routes.runs._execute_pipeline_async") as task:
+    with patch("signalpulse.api.routes.runs._execute_pipeline_async") as task:
         r = client.post(
             "/runs",
             json={"config_path": "configs/competitors.ai-agent.yaml", "use_sample_dataset": True},
@@ -87,7 +87,7 @@ def test_create_run_returns_202_and_persists(client: TestClient) -> None:
 
 def test_get_run_after_create(client: TestClient) -> None:
     """``GET /runs/{id}`` returns the run created by ``POST /runs``."""
-    with patch("marketsignal.api.routes.runs._execute_pipeline_async"):
+    with patch("signalpulse.api.routes.runs._execute_pipeline_async"):
         created = client.post("/runs", json={"use_sample_dataset": True}).json()
     r = client.get(f"/runs/{created['id']}")
     assert r.status_code == 200
@@ -97,7 +97,7 @@ def test_get_run_after_create(client: TestClient) -> None:
 def test_list_reports_filters_by_type(client: TestClient) -> None:
     import datetime as _dt
     """``GET /reports?report_type=weekly`` filters by type."""
-    from marketsignal.db.session import get_session
+    from signalpulse.db.session import get_session
 
     with get_session() as s:
         run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
@@ -132,7 +132,7 @@ def test_report_markdown_endpoint(tmp_data_dir: str, client: TestClient) -> None
     """``GET /reports/{id}/markdown`` returns the raw markdown body."""
     import datetime as _dt
 
-    from marketsignal.db.session import get_session
+    from signalpulse.db.session import get_session
 
     md_path = Path(tmp_data_dir) / "test_report.md"
     md_path.write_text("# Hello\n", encoding="utf-8")
@@ -159,7 +159,7 @@ def test_report_download_returns_file(tmp_data_dir: str, client: TestClient) -> 
     """``GET /reports/{id}/download`` streams the file with a filename header."""
     import datetime as _dt
 
-    from marketsignal.db.session import get_session
+    from signalpulse.db.session import get_session
 
     md_path = Path(tmp_data_dir) / "dl.md"
     md_path.write_text("body", encoding="utf-8")

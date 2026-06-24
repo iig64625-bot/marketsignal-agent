@@ -2,15 +2,15 @@ import json
 
 import pytest
 
-from marketsignal.evals.eval_runner import percentile
-from marketsignal.evals.faithfulness import (
+from signalpulse.evals.eval_runner import percentile
+from signalpulse.evals.faithfulness import (
     FaithfulnessResult,
     faithfulness_score,
     keyword_overlap_score,
     llm_judge_score,
 )
-from marketsignal.evals.latency import measure_latency, p50_p95_from_trace
-from marketsignal.evals.token_cost import TokenUsageAccumulator, token_cost
+from signalpulse.evals.latency import measure_latency, p50_p95_from_trace
+from signalpulse.evals.token_cost import TokenUsageAccumulator, token_cost
 
 
 def test_keyword_overlap_identical_is_one():

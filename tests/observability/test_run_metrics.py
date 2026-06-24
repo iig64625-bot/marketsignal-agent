@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from marketsignal.observability.run_metrics import RunMetrics
-from marketsignal.utils.tracing import (
+from signalpulse.observability.run_metrics import RunMetrics
+from signalpulse.utils.tracing import (
     TRACE_DIR,
     finish_trace,
     load_trace,
@@ -120,7 +120,7 @@ def test_trace_writes_metrics_blob(tmp_data_dir) -> None:
     trace = start_trace(run_id)
     rm_payload = trace  # noqa: F841 (just to keep variable)
     # Record something via the same registry tracing uses
-    from marketsignal.utils.tracing import get_metrics
+    from signalpulse.utils.tracing import get_metrics
 
     rm = get_metrics(run_id)
     assert rm is not None

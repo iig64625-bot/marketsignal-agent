@@ -1,0 +1,103 @@
+﻿"""Load competitor configuration from YAML files."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+@dataclass
+class SourceConfig:
+    """A single data source for a competitor."""
+
+    type: str
+    url: str
+
+
+@dataclass
+class CompetitorConfig:
+    """A competitor company and its data sources."""
+
+    name: str
+    website: str
+    sources: list[SourceConfig] = field(default_factory=list)
+
+
+@dataclass
+class TargetConfig:
+    """The user's own company (the report's audience)."""
+
+    name: str
+    website: str
+    description: str = ""
+
+
+@dataclass
+class PipelineConfig:
+    """Top-level pipeline configuration parsed from a YAML file."""
+
+    target: TargetConfig
+    competitors: list[CompetitorConfig]
+    monitoring_dimensions: list[str]
+    time_window_days: int = 7
+    use_sample_dataset: bool = False
+    generate_weekly_report: bool = True
+    generate_battlecards: bool = True
+    run_evals: bool = True
+
+
+def load_pipeline_config(path: str | Path) -> PipelineConfig:
+    """Parse a competitor YAML config into a :class:`PipelineConfig`.
+
+    Args:
+        path: Filesystem path to the YAML configuration.
+
+    Returns:
+        A populated :class:`PipelineConfig` ready for downstream consumption.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+        KeyError: If a required key (e.g. ``target_company``) is missing.
+        yaml.YAMLError: If the file is not valid YAML.
+    """
+    p = Path(path)
+    raw: dict[str, Any] = yaml.safe_load(p.read_text(encoding="utf-8"))
+
+    target_raw = raw.get("target_company")
+    if not target_raw:
+        raise KeyError("target_company section is required in the pipeline config")
+    target = TargetConfig(
+        name=target_raw["name"],
+        website=target_raw["website"],
+        description=target_raw.get("description", ""),
+    )
+
+    competitors: list[CompetitorConfig] = []
+    for c in raw.get("competitors", []) or []:
+        sources = [
+            SourceConfig(type=s["type"], url=s["url"])
+            for s in (c.get("sources") or [])
+            if "type" in s and "url" in s
+        ]
+        competitors.append(
+            CompetitorConfig(
+                name=c["name"],
+                website=c.get("website", ""),
+                sources=sources,
+            )
+        )
+
+    opts = raw.get("run_options", {}) or {}
+
+    return PipelineConfig(
+        target=target,
+        competitors=competitors,
+        monitoring_dimensions=list(raw.get("monitoring_dimensions", []) or []),
+        time_window_days=int(opts.get("time_window_days", 7)),
+        use_sample_dataset=bool(opts.get("use_sample_dataset", False)),
+        generate_weekly_report=bool(opts.get("generate_weekly_report", True)),
+        generate_battlecards=bool(opts.get("generate_battlecards", True)),
+        run_evals=bool(opts.get("run_evals", True)),
+    )

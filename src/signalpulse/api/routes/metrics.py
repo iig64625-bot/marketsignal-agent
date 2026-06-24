@@ -1,0 +1,86 @@
+﻿"""Per-run cost + latency dashboard endpoint.
+
+Returns the JSON payload assembled by :meth:`RunMetrics.summary`. If no
+trace is on disk (the run was never executed, or was lost), returns 404.
+"""
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
+
+from signalpulse.observability.run_metrics import RunMetrics
+from signalpulse.utils.tracing import load_trace
+
+router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+
+class NodeMetricOut(BaseModel):
+    name: str
+    n_llm_calls: int
+    tokens_in: int
+    tokens_out: int
+    duration_ms: float
+    cost_usd: float
+
+
+class MetricsResponse(BaseModel):
+    run_id: str
+    model: str
+    started_at: str
+    finished_at: str
+    totals: dict[str, float]
+    latency_ms: dict[str, float]
+    per_node: dict[str, NodeMetricOut]
+
+
+@router.get("/{run_id}", response_model=MetricsResponse)
+def get_run_metrics(run_id: str) -> MetricsResponse:
+    """Return cost + latency dashboard data for a single pipeline run.
+
+    Reads ``data/traces/{run_id}.json`` and extracts the embedded
+    ``metrics`` blob. Returns 404 if the trace does not exist (e.g. the run
+    was never executed, or the trace file was cleaned up).
+    """
+    payload = load_trace(run_id)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no trace found for run_id={run_id}",
+        )
+    blob = payload.get("metrics")
+    if not blob:
+        # No metrics blob (older trace format). Return a zero-filled response
+        # so the frontend can still render an empty dashboard.
+        return MetricsResponse(
+            run_id=run_id,
+            model="",
+            started_at=str(payload.get("started_at", "")),
+            finished_at=str(payload.get("finished_at", "") or ""),
+            totals={"llm_calls": 0.0, "tokens_in": 0.0, "tokens_out": 0.0, "cost_usd": 0.0},
+            latency_ms={"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0},
+            per_node={},
+        )
+    rm = RunMetrics.from_dict(blob)
+    summary = rm.summary()
+    per_node: dict[str, NodeMetricOut] = {}
+    for name, nd in summary.get("per_node", {}).items():
+        per_node[name] = NodeMetricOut(
+            name=name,
+            n_llm_calls=int(nd.get("n_llm_calls", 0)),
+            tokens_in=int(nd.get("tokens_in", 0)),
+            tokens_out=int(nd.get("tokens_out", 0)),
+            duration_ms=float(nd.get("duration_ms", 0.0)),
+            cost_usd=float(nd.get("cost_usd", 0.0)),
+        )
+    return MetricsResponse(
+        run_id=run_id,
+        model=str(summary.get("model", "")),
+        started_at=str(summary.get("started_at", "")),
+        finished_at=str(summary.get("finished_at", "")),
+        totals={k: float(v) for k, v in summary.get("totals", {}).items()},
+        latency_ms={k: float(v) for k, v in summary.get("latency_ms", {}).items()},
+        per_node=per_node,
+    )
+
+
+__all__ = ["router", "MetricsResponse", "NodeMetricOut"]

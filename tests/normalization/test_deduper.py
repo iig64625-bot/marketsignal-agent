@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from marketsignal.models.base import new_id
-from marketsignal.models.normalized_document import NormalizedDocument
-from marketsignal.normalization.deduper import deduplicate
+from signalpulse.models.base import new_id
+from signalpulse.models.normalized_document import NormalizedDocument
+from signalpulse.normalization.deduper import deduplicate
 
 
 def _make(company: str, content_hash: str, when: _dt.datetime | None) -> NormalizedDocument:

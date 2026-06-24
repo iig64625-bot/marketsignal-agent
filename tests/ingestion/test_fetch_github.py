@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from marketsignal.ingestion.fetch_github import fetch_github_releases, parse_repo_url
+from signalpulse.ingestion.fetch_github import fetch_github_releases, parse_repo_url
 
 
 def test_parse_repo_url_accepts_https_and_ssh():

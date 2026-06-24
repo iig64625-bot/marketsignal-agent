@@ -1,7 +1,7 @@
-﻿"""Unit tests for pure functions in marketsignal.api.routes.ws."""
+﻿"""Unit tests for pure functions in signalpulse.api.routes.ws."""
 from __future__ import annotations
 
-from marketsignal.api.routes.ws import _resolved_status, _trace_status
+from signalpulse.api.routes.ws import _resolved_status, _trace_status
 
 
 def test_trace_status_reads_top_level_field() -> None:

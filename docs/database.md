@@ -1,4 +1,4 @@
-# MarketSignal Database — ER Diagram & Schema Reference
+# SignalPulse Database — ER Diagram & Schema Reference
 
 > Database: SQLite (default) or any SQLAlchemy-compatible URL (Postgres / MySQL).  
 > Migrations: `migrations/` directory managed by Alembic.
@@ -27,7 +27,7 @@ erDiagram
 
 ### `companies`
 The target + competitor companies.
-- `id` (PK, 12-char hex) — `marketsignal.models.base.new_id()`
+- `id` (PK, 12-char hex) — `signalpulse.models.base.new_id()`
 - `name` (unique) — e.g. `"Dify"`, `"Coze"`, `"FastGPT"`
 - `website`, `description`
 

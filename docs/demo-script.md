@@ -1,4 +1,4 @@
-﻿# MarketSignal Agent — 面试演示脚本
+﻿# SignalPulse — 面试演示脚本
 
 > 本文用于面试现场的 5 分钟现场演示 + Q&A 准备。所有命令都在 PowerShell + venv 环境下验证过（57 个测试全绿）。
 
@@ -22,11 +22,11 @@
 # T3: pytest watch 模式（可选）
 
 # 确认 venv 与依赖
-.\.venv\Scripts\python.exe -c "import marketsignal; print('OK')"
+.\.venv\Scripts\python.exe -c "import signalpulse; print('OK')"
 ```
 
 **提前打印好贴在墙上**：
-- `python -m marketsignal.cli run --use-sample-dataset` ← 主命令
+- `python -m signalpulse.cli run --use-sample-dataset` ← 主命令
 - 9 个 signals / 2 个 competitors / 6 个 high-confidence ← 期望输出
 - 引用覆盖率 0.47（无 LLM 的真实值）← 主动解释，不要回避
 
@@ -46,7 +46,7 @@
 ```powershell
 $env:PYTHONPATH = "src"
 Remove-Item data\reports\*.md -ErrorAction SilentlyContinue
-python -m marketsignal.cli run --use-sample-dataset
+python -m signalpulse.cli run --use-sample-dataset
 ```
 
 **T1 跑完后**关键日志会打印：
@@ -142,7 +142,7 @@ code .\src\marketsignal\citation\checker.py
 > 三个改动：
 > 1. `MARKETSIGNAL_DB_URL` 指向 Postgres（已经走 SQLAlchemy，0 代码改动）
 > 2. `load_config` 加 `apscheduler` 定时触发，weekly 报告 cron 跑
-> 3. 加一个 `marketsignal.agents.nodes.publish_slack` 节点，把 report 推到 Slack/飞书
+> 3. 加一个 `signalpulse.agents.nodes.publish_slack` 节点，把 report 推到 Slack/飞书
 >
 > 整套架构没为单机 demo 做特殊优化，迁移是**水平**的。
 
@@ -150,7 +150,7 @@ code .\src\marketsignal\citation\checker.py
 
 > 三点根本区别：
 >
-> | | Prompt 直接调 LLM | MarketSignal |
+> | | Prompt 直接调 LLM | SignalPulse |
 > |---|---|---|
 > | **数据来源** | LLM 自己的训练知识（过时 + 幻觉） | 实抓的 URL（可点击） |
 > | **过程** | 一次性生成 | 11 个节点 + 引用校验 + 评估 |
@@ -171,4 +171,4 @@ code .\src\marketsignal\citation\checker.py
 
 ## 5. 一句话电梯演讲（30 秒版）
 
-> "MarketSignal Agent 是给产品/销售团队用的 AI 竞品情报系统。它主动抓竞品公开数据，过 LangGraph 多 Agent 工作流（不是单个 prompt），生成**带引用证据**的周报和销售 Battlecard，并自动跑 5 个 eval 指标（引用覆盖率、未支撑率、去重率、延迟、token 成本）。整套系统在本地 SQLite 上跑，57 个测试 0.7 秒绿，样例数据 0 网络可演示。"
+> "SignalPulse 是给产品/销售团队用的 AI 竞品情报系统。它主动抓竞品公开数据，过 LangGraph 多 Agent 工作流（不是单个 prompt），生成**带引用证据**的周报和销售 Battlecard，并自动跑 5 个 eval 指标（引用覆盖率、未支撑率、去重率、延迟、token 成本）。整套系统在本地 SQLite 上跑，57 个测试 0.7 秒绿，样例数据 0 网络可演示。"

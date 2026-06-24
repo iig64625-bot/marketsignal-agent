@@ -1,8 +1,8 @@
 ﻿"""Tests for the CORS settings + app wiring (Task A)."""
 from __future__ import annotations
 
-from marketsignal.api.app import create_app
-from marketsignal.config.settings import get_settings
+from signalpulse.api.app import create_app
+from signalpulse.config.settings import get_settings
 
 
 def test_cors_origins_default_allowlist() -> None:

@@ -7,10 +7,10 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 SITES = [
-    ("marketsignal/normalization/content_extractor.py", "language = \"en\""),
-    ("marketsignal/rag/vector_store.py", "delete_collection"),
-    ("marketsignal/scheduler.py", "remove_job"),
-    ("marketsignal/reporting/render_pdf.py", "Helvetica"),
+    ("signalpulse/normalization/content_extractor.py", "language = \"en\""),
+    ("signalpulse/rag/vector_store.py", "delete_collection"),
+    ("signalpulse/scheduler.py", "remove_job"),
+    ("signalpulse/reporting/render_pdf.py", "Helvetica"),
 ]
 
 
@@ -35,9 +35,9 @@ def test_existing_broad_db_safety_nets_are_preserved() -> None:
     """The intentional broad except in db/session.py and api/routes/ws.py
     (used for transaction rollback / WebSocket boundary) must be left alone.
     """
-    db_text = (SRC / "marketsignal/db/session.py").read_text(encoding="utf-8")
+    db_text = (SRC / "signalpulse/db/session.py").read_text(encoding="utf-8")
     assert "except Exception:" in db_text, "db/session.py should still have the broad except for rollback"
 
-    ws_text = (SRC / "marketsignal/api/routes/ws.py").read_text(encoding="utf-8")
+    ws_text = (SRC / "signalpulse/api/routes/ws.py").read_text(encoding="utf-8")
     # The WebSocket error boundary also has bare except Exception: pass for cleanup
     assert ws_text.count("except Exception:") >= 1

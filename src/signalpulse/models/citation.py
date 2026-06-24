@@ -1,0 +1,27 @@
+﻿from __future__ import annotations
+
+from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from signalpulse.models.base import Base, TimestampMixin, new_id
+
+
+class Citation(Base, TimestampMixin):
+    __tablename__ = "citations"
+
+    id: Mapped[str] = mapped_column(String(12), primary_key=True, default=new_id)
+    report_id: Mapped[str] = mapped_column(
+        String(12), ForeignKey("reports.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    claim_id: Mapped[str | None] = mapped_column(
+        String(12), ForeignKey("claims.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    document_id: Mapped[str | None] = mapped_column(
+        String(12), ForeignKey("normalized_documents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    url: Mapped[str] = mapped_column(String(1024), nullable=False, default="")
+    snippet: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    report: Mapped[Report] = relationship(  # noqa: F821
+        "Report", back_populates="citations", passive_deletes=True
+    )

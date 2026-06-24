@@ -4,7 +4,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from marketsignal.utils.retry import (
+from signalpulse.utils.retry import (
     DEFAULT_RETRYABLE,
     retry_with_backoff,
     retry_with_backoff_async,

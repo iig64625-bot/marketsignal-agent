@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from marketsignal.models.base import new_id
-from marketsignal.models.signal import Signal
-from marketsignal.reporting.render_markdown import render_battlecard, render_weekly_report
-from marketsignal.reporting.templates import BATTLECARD_SECTIONS, WEEKLY_SECTIONS
+from signalpulse.models.base import new_id
+from signalpulse.models.signal import Signal
+from signalpulse.reporting.render_markdown import render_battlecard, render_weekly_report
+from signalpulse.reporting.templates import BATTLECARD_SECTIONS, WEEKLY_SECTIONS
 
 
 def _sig(

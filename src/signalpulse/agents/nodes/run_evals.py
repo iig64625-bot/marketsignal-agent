@@ -1,0 +1,43 @@
+"""Node: compute all eval metrics and persist an :class:`EvalRun` row."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from loguru import logger
+
+from signalpulse.agents.state import GraphState
+from signalpulse.db.session import get_session
+from signalpulse.evals.summary import build_eval_summary
+from signalpulse.utils.tracing import trace_node
+
+
+@trace_node("run_evals_node")
+async def run_evals_node(state: GraphState) -> GraphState:
+    run_id = state.get("run_id")
+    metrics = dict(state.get("metrics", {}))
+    if not run_id:
+        return {"metrics": metrics}
+    with get_session() as s:
+        row = build_eval_summary(run_id, s)
+    metrics["citation_coverage"] = row.citation_coverage
+    metrics["unsupported_claim_rate"] = row.unsupported_claim_rate
+    metrics["dedup_rate"] = row.dedup_rate
+    out_dir = Path("data/evals")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"eval_{run_id}.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "citation_coverage": row.citation_coverage,
+                "unsupported_claim_rate": row.unsupported_claim_rate,
+                "dedup_rate": row.dedup_rate,
+                "summary": json.loads(row.summary_json),
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    logger.info("eval summary: run={} cov={:.2f} unsup={:.2f}", run_id, row.citation_coverage, row.unsupported_claim_rate)
+    return {"metrics": metrics}
