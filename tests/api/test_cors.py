@@ -1,0 +1,30 @@
+﻿"""Tests for the CORS settings + app wiring (Task A)."""
+from __future__ import annotations
+
+from marketsignal.api.app import create_app
+from marketsignal.config.settings import get_settings
+
+
+def test_cors_origins_default_allowlist() -> None:
+    """The default CORS allowlist is the localhost dev set, not the wildcard."""
+    settings = get_settings()
+    assert "*" not in settings.cors_origins
+    assert "http://localhost:8501" in settings.cors_origins  # Streamlit
+    assert "http://localhost:3000" in settings.cors_origins  # React/next
+
+
+def test_app_does_not_use_wildcard_cors() -> None:
+    """The FastAPI app must not be configured with allow_origins=wildcard."""
+    import inspect
+    src = inspect.getsource(create_app)
+    # Use a placeholder to avoid escaping issues: ensure the source has
+    # the settings-driven allow_origins line and the wildcard is not used.
+    assert "allow_origins=settings.cors_origins" in src
+    assert 'allow_origins=["*"]' not in src
+
+
+def test_app_has_cors_middleware() -> None:
+    """The FastAPI app must have CORSMiddleware installed."""
+    app = create_app()
+    middleware_classes = [m.cls.__name__ for m in app.user_middleware]
+    assert "CORSMiddleware" in middleware_classes
