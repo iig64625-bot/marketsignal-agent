@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from loguru import logger
+
 
 def markdown_to_pdf(
     md_text: str,
@@ -51,7 +53,9 @@ def markdown_to_pdf(
     # Use a Unicode TTF font if available (fpdf2 ships with one)
     try:
         pdf.set_font("Helvetica", size=11)
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        # fpdf2 falls back to a bundled font if Helvetica is unavailable
+        logger.debug("render_pdf: Helvetica not available, falling back to Arial: {}", exc)
         pdf.set_font("Arial", size=11)
 
     in_code = False
