@@ -1,10 +1,10 @@
-﻿"""Tests for Task B: bare except:pass should be gone from the 5 named sites."""
+"""Tests for Task B: bare except:pass should be gone from the 5 named sites."""
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-SRC = Path(r"D:\新项目\src")
+SRC = Path(__file__).resolve().parents[1] / "src"
 
 SITES = [
     ("marketsignal/normalization/content_extractor.py", "language = \"en\""),
