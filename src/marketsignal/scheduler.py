@@ -69,10 +69,16 @@ def _run_job(job_id: str) -> None:
         logger.warning("scheduler: job {} not found in state", job_id)
         return
     logger.info("scheduler: firing job={} config={}", job_id, state.config_path)
+    target_company = "Dify"  # safe fallback
+    try:
+        from marketsignal.config.loader import load_pipeline_config
+        target_company = load_pipeline_config(state.config_path).target.name
+    except Exception as cfg_exc:  # noqa: BLE001
+        logger.warning("scheduler: failed to load target_company from {}: {}", state.config_path, cfg_exc)
     try:
         pipeline = build_pipeline(use_sample_dataset=state.use_sample_dataset)
         initial: GraphState = {
-            "target_company": "Dify",
+            "target_company": target_company,
             "warnings": [],
             "metrics": {},
             "status": "pending",
@@ -152,8 +158,8 @@ def remove_job(job_id: str) -> bool:
     if job_id in _state:
         try:
             sched.remove_job(job_id)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc)
         del _state[job_id]
         _save_jobs()
         return True
