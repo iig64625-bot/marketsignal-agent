@@ -1,6 +1,7 @@
 """Node: group events by company and ask the LLM for market signals."""
 from __future__ import annotations
 
+import datetime as _dt
 import json
 from collections import defaultdict
 
@@ -44,7 +45,21 @@ async def analyze_signals_node(state: GraphState) -> GraphState:
         for company_id, group in groups.items():
             company = s.get(Company, company_id)
             company_name = company.name if company else company_id
-            prompt = _build_prompt(company_name, group)
+            # Sort by published_at desc (newest first), then drop the tail
+            # if it would blow up the prompt budget.
+            sorted_group = sorted(
+                group,
+                key=lambda ev: ev.published_at or _dt.datetime.min,
+                reverse=True,
+            )
+            truncated = len(sorted_group) > MAX_EVENTS_PER_COMPETITOR
+            if truncated:
+                warnings.append(
+                    f"analyze_signals: {company_name} has {len(sorted_group)} events, "
+                    f"truncated to {MAX_EVENTS_PER_COMPETITOR} most recent"
+                )
+                sorted_group = sorted_group[:MAX_EVENTS_PER_COMPETITOR]
+            prompt = _build_prompt(company_name, sorted_group, truncated=truncated)
             try:
                 from marketsignal.observability.llm_tracking import invoke_with_metrics
 
@@ -81,9 +96,36 @@ async def analyze_signals_node(state: GraphState) -> GraphState:
     return {"signal_ids": signal_ids, "warnings": warnings}
 
 
-def _build_prompt(company: str, events: list[Event]) -> str:
+# Per-line caps protect the prompt from a single event blowing up the
+# context. We picked 100 / 300 to keep the per-event line under ~80 tokens
+# while still leaving room for the event type + id.
+MAX_TITLE_CHARS = 100
+MAX_SUMMARY_CHARS = 300
+# Hard cap on events per competitor. Above this, we keep the first N and
+# drop the rest (sorted by published_at desc inside the caller).
+MAX_EVENTS_PER_COMPETITOR = 50
+
+
+def _build_prompt(company: str, events: list[Event], *, truncated: bool = False) -> str:
+    """Build the per-competitor analysis prompt.
+
+    Args:
+        company: The competitor's display name.
+        events: Events to include in the prompt.
+        truncated: If True, the caller dropped some events to fit
+            :data:`MAX_EVENTS_PER_COMPETITOR`. We add a one-line note so
+            the LLM knows the list is incomplete.
+    """
     lines = [f"COMPETITOR: {company}", f"EVENTS ({len(events)}):"]
+    if truncated:
+        lines.append(
+            f"NOTE: showing the {len(events)} most recent events; older events were dropped to fit the prompt budget."
+        )
     for e in events:
-        lines.append(f"- id={e.id} type={e.event_type} title={e.title} summary={e.summary}")
+        title = (e.title or "")[:MAX_TITLE_CHARS]
+        summary = (e.summary or "")[:MAX_SUMMARY_CHARS]
+        lines.append(
+            f"- id={e.id} type={e.event_type} title={title} summary={summary}"
+        )
     lines.append("Return the JSON list of signals.")
     return "\n".join(lines)
