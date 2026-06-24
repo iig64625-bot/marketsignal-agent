@@ -106,8 +106,8 @@ class MarketSignalVectorStore:
         """Drop the entire collection (used by tests)."""
         try:
             self._client.delete_collection(COLLECTION)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc)
         self._collection = self._client.get_or_create_collection(
             name=COLLECTION, metadata={"hnsw:space": "cosine"}
         )
