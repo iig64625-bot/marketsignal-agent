@@ -24,6 +24,7 @@ The "Status" column tracks whether the decision is still current.
 | 008 | In-process observability vs. OpenTelemetry  | Accepted |
 | 009 | WebSocket polling over in-memory pub/sub    | Accepted |
 | 010 | RAG gold set over LLM self-grading          | Accepted |
+| 011 | Incremental trace persistence + LRU cleanup | Accepted |
 
 ---
 
@@ -283,6 +284,60 @@ keyword coverage, and prints a per-category breakdown.
 
 ---
 
+---
+
+## ADR-011 — Incremental trace persistence + LRU cleanup
+
+**Context.** The trace JSON at ``data/traces/{run_id}.json`` is the
+single source of truth for the WebSocket stream endpoint (ADR-009). To
+make live progress visible, the trace has to be on disk *before* the
+run finishes. That means rewriting the file on every completed span
+rather than once at ``finish_trace``.
+
+A side effect of this is that ``utils/tracing.py`` accumulates entries
+in two module-level dicts (``_CURRENT``, ``_METRICS``) and on disk
+indefinitely. A long-running API server would have:
+- unbounded memory (each ``RunMetrics`` is small but there is no cap)
+- unbounded ``data/traces/`` directory growth
+- unbounded disk usage in deployments that share storage with the DB
+
+**Decision.** Two policies, both applied at every ``start_trace`` /
+``finish_trace`` call (under a single ``threading.Lock``):
+
+1. **Age-based eviction**: any run whose ``RunMetrics.finished_at``
+   is older than 24 hours is dropped from the in-memory dicts and
+   its on-disk JSON is unlinked.
+2. **Cap-based eviction**: if the in-memory dict is still over
+   ``_MAX_ENTRIES = 50`` after age-based eviction, the oldest runs
+   (by dict insertion order) are dropped.
+
+The lock is per-module, not per-run, so concurrent WebSocket clients
+do not see a half-pruned state.
+
+**Consequences.**
+
+* (+) Bounded memory: at most 50 ``RunMetrics`` in the process.
+* (+) Bounded disk: at most ~50 trace JSON files at any time.
+* (+) Self-healing: no scheduled cleanup job needed; the next pipeline
+  run evicts the old ones.
+* (-) The 24h / 50 cap is a hard ceiling. A user who wants to keep
+  traces for a month must copy ``data/traces/`` to cold storage before
+  the next run evicts them. The ADR is honest about this trade-off.
+* (-) The cap is per-process, not global. Multiple API workers each
+  keep their own 50 entries. For a single-process dev server (the
+  only deployment we currently support) this is fine; a multi-worker
+  production deployment would need an out-of-process store.
+
+---
+
+## See also
+
+* `docs/architecture.md` — the system-level architecture (layers,
+  data flow, deployment).
+* `docs/database.md` — the relational schema and migration story.
+* `docs/demo-script.md` — how to demo this in a 5-minute interview.
+* `docs/interview-story.md` — the "tell me about this project"
+  walk-through.
 ## See also
 
 * `docs/architecture.md` — the system-level architecture (layers,
