@@ -1,11 +1,1 @@
-﻿# Eval Runs
-
-每次 pipeline run 的评估指标输出：
-
-- citation_coverage — 有引用支撑的关键结论占比
-- unsupported_claim_rate — 无来源结论占比
-- dedup_rate — 重复信息合并率
-- vg_latency_ms / 	oken_cost_usd — 性能与成本
-
-文件名格式：eval_<run_id>.json。同时会写入 eval_runs 表便于历史对比。
-
+IyBFdmFsIFJ1bnMgIOavj+asoSBwaXBlbGluZSBydW4g55qE6K+E5Lyw5oyH5qCH6L6T5Ye677yaICAtIGNpdGF0aW9uX2NvdmVyYWdlIOKAlCDmnInlvJXnlKjmlK/mkpHnmoTlhbPplK7nu5PorrrljaDmr5QgLSB1bnN1cHBvcnRlZF9jbGFpbV9yYXRlIOKAlCDml6DmnaXmupDnu5PorrrljaDmr5QgLSBkZWR1cF9yYXRlIOKAlCDph43lpI3kv6Hmga/lkIjlubbnjocgLSAHdmdfbGF0ZW5jeV9tcyAvIAlva2VuX2Nvc3RfdXNkIOKAlCDmgKfog73kuI7miJDmnKwgIOaWh+S7tuWQjeagvOW8j++8mmV2YWxfPHJ1bl9pZD4uanNvbuOAguWQjOaXtuS8muWGmeWFpSBldmFsX3J1bnMg6KGo5L6/5LqO5Y6G5Y+y5a+55q+U44CCIA==

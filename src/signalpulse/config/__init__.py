@@ -1,5 +1,1 @@
-"""Application settings loaded from environment variables."""
-
-from signalpulse.config.settings import Settings, get_settings
-
-__all__ = ["Settings", "get_settings"]
+IiIiQXBwbGljYXRpb24gc2V0dGluZ3MgbG9hZGVkIGZyb20gZW52aXJvbm1lbnQgdmFyaWFibGVzLiIiIiAgZnJvbSBzaWduYWxwdWxzZS5jb25maWcuc2V0dGluZ3MgaW1wb3J0IFNldHRpbmdzLCBnZXRfc2V0dGluZ3MgIF9fYWxsX18gPSBbIlNldHRpbmdzIiwgImdldF9zZXR0aW5ncyJd

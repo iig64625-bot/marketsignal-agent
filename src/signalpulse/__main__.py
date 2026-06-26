@@ -1,9 +1,1 @@
-﻿"""Allow ``python -m signalpulse`` to work as a CLI entry point."""
-from __future__ import annotations
-
-import sys
-
-from signalpulse.cli import main
-
-if __name__ == "__main__":
-    sys.exit(main())
+IiIiQWxsb3cgYGBweXRob24gLW0gc2lnbmFscHVsc2VgYCB0byB3b3JrIGFzIGEgQ0xJIGVudHJ5IHBvaW50LiIiIiBmcm9tIF9fZnV0dXJlX18gaW1wb3J0IGFubm90YXRpb25zICBpbXBvcnQgc3lzICBmcm9tIHNpZ25hbHB1bHNlLmNsaSBpbXBvcnQgbWFpbiAgaWYgX19uYW1lX18gPT0gIl9fbWFpbl9fIjogICAgIHN5cy5leGl0KG1haW4oKSk=

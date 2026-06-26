@@ -1,12 +1,1 @@
-{
-  "run_id": "7a9e60157724",
-  "citation_coverage": 0.4675324675324675,
-  "unsupported_claim_rate": 0.5324675324675324,
-  "dedup_rate": 0.0,
-  "summary": {
-    "total_claims": 77,
-    "supported_claims": 36,
-    "total_normalized_docs": 18,
-    "unique_content_hashes": 9
-  }
-}
+eyAgICJydW5faWQiOiAiN2E5ZTYwMTU3NzI0IiwgICAiY2l0YXRpb25fY292ZXJhZ2UiOiAwLjQ2NzUzMjQ2NzUzMjQ2NzUsICAgInVuc3VwcG9ydGVkX2NsYWltX3JhdGUiOiAwLjUzMjQ2NzUzMjQ2NzUzMjQsICAgImRlZHVwX3JhdGUiOiAwLjAsICAgInN1bW1hcnkiOiB7ICAgICAidG90YWxfY2xhaW1zIjogNzcsICAgICAic3VwcG9ydGVkX2NsYWltcyI6IDM2LCAgICAgInRvdGFsX25vcm1hbGl6ZWRfZG9jcyI6IDE4LCAgICAgInVuaXF1ZV9jb250ZW50X2hhc2hlcyI6IDkgICB9IH0=

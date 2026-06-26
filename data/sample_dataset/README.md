@@ -1,17 +1,1 @@
-﻿# Sample Dataset
-
-面试演示用的本地稳定样例数据。
-
-## 内容
-
-- events.json — 9 条手写事件，覆盖 2 个竞品 (Coze / FastGPT) 的 4 类信号（product / pricing / hiring / gtm / risk）
-- signals.json — 9 条对应的市场信号（finding / analysis / recommendation / confidence 完整四段）
-
-## 用途
-
-用 python -m marketsignal.cli run --use-sample-dataset 触发，绕过 fetch / LLM / embedder 节点，0 网络 0 token 跑完整流水线，保证 demo 现场 100% 不翻车。
-
-## 维护
-
-新增竞品时同时补 events 与 signals 两份 JSON，引用关系走 source_event_indices 数组。
-
+IyBTYW1wbGUgRGF0YXNldCAg6Z2i6K+V5ryU56S655So55qE5pys5Zyw56iz5a6a5qC35L6L5pWw5o2u44CCICAjIyDlhoXlrrkgIC0gZXZlbnRzLmpzb24g4oCUIDkg5p2h5omL5YaZ5LqL5Lu277yM6KaG55uWIDIg5Liq56ue5ZOBIChDb3plIC8gRmFzdEdQVCkg55qEIDQg57G75L+h5Y+377yIcHJvZHVjdCAvIHByaWNpbmcgLyBoaXJpbmcgLyBndG0gLyByaXNr77yJIC0gc2lnbmFscy5qc29uIOKAlCA5IOadoeWvueW6lOeahOW4guWcuuS/oeWPt++8iGZpbmRpbmcgLyBhbmFseXNpcyAvIHJlY29tbWVuZGF0aW9uIC8gY29uZmlkZW5jZSDlrozmlbTlm5vmrrXvvIkgICMjIOeUqOmAlCAg55SoIHB5dGhvbiAtbSBtYXJrZXRzaWduYWwuY2xpIHJ1biAtLXVzZS1zYW1wbGUtZGF0YXNldCDop6blj5HvvIznu5Xov4cgZmV0Y2ggLyBMTE0gLyBlbWJlZGRlciDoioLngrnvvIwwIOe9kee7nCAwIHRva2VuIOi3keWujOaVtOa1geawtOe6v++8jOS/neivgSBkZW1vIOeOsOWcuiAxMDAlIOS4jee/u+i9puOAgiAgIyMg57u05oqkICDmlrDlop7nq57lk4Hml7blkIzml7booaUgZXZlbnRzIOS4jiBzaWduYWxzIOS4pOS7vSBKU09O77yM5byV55So5YWz57O76LWwIHNvdXJjZV9ldmVudF9pbmRpY2VzIOaVsOe7hOOAgiA=
