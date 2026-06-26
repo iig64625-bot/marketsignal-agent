@@ -1,1 +1,1 @@
-IiIiRmFzdEFQSSBhcHBsaWNhdGlvbiBwYWNrYWdlLiIiIiBmcm9tIF9fZnV0dXJlX18gaW1wb3J0IGFubm90YXRpb25zICBmcm9tIHNpZ25hbHB1bHNlLmFwaS5hcHAgaW1wb3J0IGNyZWF0ZV9hcHAgIF9fYWxsX18gPSBbImNyZWF0ZV9hcHAiXQ==
+"""FastAPI application package.""" from __future__ import annotations  from signalpulse.api.app import create_app  __all__ = ["create_app"]

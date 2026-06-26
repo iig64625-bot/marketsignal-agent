@@ -1,1 +1,1 @@
-QGVjaG8gb2ZmIGNoY3AgNjUwMDEgPm51bCBlY2hvIEtpbGxpbmcgYWxsIHN0cmVhbWxpdCBwcm9jZXNzZXMuLi4gdGFza2tpbGwgL0lNIHN0cmVhbWxpdC5leGUgL0YgPm51bCAyPiYxIHRhc2traWxsIC9JTSBweXRob24uZXhlIC9GSSAiV0lORE9XVElUTEUgZXEgc3RyZWFtbGl0KiIgL0YgPm51bCAyPiYxIGVjaG8gRG9uZS4=
+@echo off chcp 65001 >nul echo Killing all streamlit processes... taskkill /IM streamlit.exe /F >nul 2>&1 taskkill /IM python.exe /FI "WINDOWTITLE eq streamlit*" /F >nul 2>&1 echo Done.

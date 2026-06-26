@@ -1,1 +1,1 @@
-IiIiU3RyZWFtbGl0IFVJIHBhY2thZ2UuICBMYXVuY2hlZCBieSBydW5uaW5nIGBgc3RyZWFtbGl0IHJ1biBzcmMvc2lnbmFscHVsc2UvdWkvYXBwLnB5YGAuICIiIiBmcm9tIF9fZnV0dXJlX18gaW1wb3J0IGFubm90YXRpb25zICBfX2FsbF9fOiBsaXN0W3N0cl0gPSBbXQ==
+"""Streamlit UI package.  Launched by running ``streamlit run src/signalpulse/ui/app.py``. """ from __future__ import annotations  __all__: list[str] = []

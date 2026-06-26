@@ -1,1 +1,1 @@
-QGVjaG8gb2ZmIGNoY3AgNjUwMDEgPm51bCBjZCAvZCAiJX5kcDAiIHBvd2Vyc2hlbGwgLU5vUHJvZmlsZSAtRXhlY3V0aW9uUG9saWN5IEJ5cGFzcyAtRmlsZSAic3RhcnRfdWkucHMxIg==
+@echo off chcp 65001 >nul cd /d "%~dp0" powershell -NoProfile -ExecutionPolicy Bypass -File "start_ui.ps1"

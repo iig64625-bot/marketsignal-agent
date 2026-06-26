@@ -1,1 +1,1 @@
-IiIiU2lnbmFsUHVsc2UgQWdlbnQgLSBBSSBDb21wZXRpdGl2ZSBJbnRlbGxpZ2VuY2UgJiBNYXJrZXQgU2lnbmFsIEFuYWx5c3QuIiIiICBfX3ZlcnNpb25fXyA9ICIwLjEuMCI=
+"""SignalPulse Agent - AI Competitive Intelligence & Market Signal Analyst."""  __version__ = "0.1.0"
