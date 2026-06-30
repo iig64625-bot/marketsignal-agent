@@ -317,7 +317,7 @@ def render_dashboard() -> None:
         for r in recent:
             ts = r["created_at"].strftime("%m-%d %H:%M") if r.get("created_at") else "?"
             st.markdown(
-                f"- **{r['competitor']}** · _{r['signal_type']}_ · {ts}  \n"
+                f"- **{r['competitor']}** · _{label_signal_type(r['signal_type'])}_ · {ts}  \n"
                 f"  {r['finding'][:160]}"
             )
 
