@@ -102,7 +102,7 @@ def _radar_for_run(crawl_run_id: str) -> dict[str, list[float]]:
             if idx is not None:
                 scores[idx] = min(10.0, float(n) * 2.0)
         if all(s == 0 for s in scores):
-            scores = [5.0] * len(RADAR_CATEGORIES)
+            scores = [5.0] * len(RADAR_CATEGORY_KEYS)
         result[name] = scores
     return result
 
@@ -152,14 +152,13 @@ def render_report_viewer(report_type: str = "weekly") -> None:
         data=body.encode("utf-8"),
         file_name=Path(selected.markdown_path).name,
         mime="text/markdown",
-        use_container_width=True,
         key=f"md-dl-{rid}",
     )
 
     run_id = getattr(selected, "crawl_run_id", None)
     col1, col2 = st.columns(2)
     with col1:
-        if st.button(t("export_pdf"), key=f"pdf-btn-{rid}", use_container_width=True):
+        if st.button(t("export_pdf"), key=f"pdf-btn-{rid}"):
             try:
                 pdf_bytes = _export(selected, "pdf", run_id)
                 st.session_state[f"pdf_bytes_{rid}"] = pdf_bytes
@@ -172,10 +171,9 @@ def render_report_viewer(report_type: str = "weekly") -> None:
                 file_name=f"{report_type}_{rid[:12]}.pdf",
                 mime="application/pdf",
                 key=f"pdf-dl-{rid}",
-                use_container_width=True,
             )
     with col2:
-        if st.button(t("export_excel"), key=f"xlsx-btn-{rid}", use_container_width=True):
+        if st.button(t("export_excel"), key=f"xlsx-btn-{rid}"):
             try:
                 xlsx_bytes = _export(selected, "xlsx", run_id)
                 st.session_state[f"xlsx_bytes_{rid}"] = xlsx_bytes
@@ -188,7 +186,6 @@ def render_report_viewer(report_type: str = "weekly") -> None:
                 file_name=f"{report_type}_{rid[:12]}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"xlsx-dl-{rid}",
-                use_container_width=True,
             )
 
     if run_id:

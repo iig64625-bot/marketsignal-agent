@@ -108,7 +108,7 @@ if not _has_runs() and not st.session_state.get("onboarding_dismissed", False):
             st.session_state["onboarding_dismissed"] = True
             st.rerun()
     with c3:
-        if st.button("✕", key="onb_dismiss"):
+        if st.button(t("onboarding_skip"), key="onb_dismiss"):
             st.session_state["onboarding_dismissed"] = True
             st.rerun()
 

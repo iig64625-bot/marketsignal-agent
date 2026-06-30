@@ -38,3 +38,7 @@ data/raw/
 data/scheduler/
 *.db-journal
 *.bak-pre-v5
+
+// Transient
+*.bak*
+.python/

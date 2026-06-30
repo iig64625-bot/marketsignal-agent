@@ -40,6 +40,7 @@ def _next_run(cron: str) -> str:
 def render_scheduling() -> None:
     st.subheader(t("schedule_title"))
     st.caption(t("schedule_caption"))
+    st.warning(t("schedule_daemon_hint"))
 
     with st.form("schedule_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
@@ -90,6 +91,9 @@ def render_scheduling() -> None:
             if cols[5].button(t("schedule_delete"), key=f"sched_del_{i}"):
                 jobs.pop(i)
                 _save(jobs)
+                st.rerun()
+            if cols[4].button(t("schedule_run_now"), key=f"sched_run_{i}"):
+                st.session_state["trigger_sample_run"] = True if j.get("use_sample") else False
                 st.rerun()
             if enabled != j.get("enabled", True):
                 jobs[i]["enabled"] = enabled
