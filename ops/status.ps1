@@ -1,4 +1,4 @@
-﻿# SignalPulse status
+# SignalPulse status
 $ErrorActionPreference = "Continue"
 $root = $PSScriptRoot | Split-Path -Parent
 
@@ -25,7 +25,7 @@ if ($listen) {
 # 2. port
 $listen = Get-NetTCPConnection -LocalPort 8501 -State Listen -ErrorAction SilentlyContinue
 if ($listen) {
-    Write-OK "port 8501: listening, owner PID $($listen.OwningProcess)"
+    $pids = ($listen | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique) -join ', '; Write-OK "port 8501: listening, PID $pids"
 } else {
     Write-FAIL "port 8501: not listening"
 }
