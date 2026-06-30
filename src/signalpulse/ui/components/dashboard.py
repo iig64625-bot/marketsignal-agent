@@ -17,6 +17,7 @@ from sqlalchemy import desc, func, select
 from signalpulse.db.session import get_session
 from signalpulse.models import Claim, Company, CrawlRun, EvalRun, Report, Signal
 from signalpulse.ui.i18n import t
+from signalpulse.reporting.templates import label_signal_type
 
 
 # ---------------- helpers ----------------
@@ -293,6 +294,7 @@ def render_dashboard() -> None:
         since = datetime.now(timezone.utc) - timedelta(days=30)
 
     df_filt = _all_signals_filtered(search, since, sel_type, sel_comp)
+    df_filt = df_filt.assign(type=lambda d: d['type'].map(label_signal_type))
     if df_filt.empty:
         st.info(t("no_match"))
     else:

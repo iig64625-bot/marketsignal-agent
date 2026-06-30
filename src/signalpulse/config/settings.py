@@ -1,8 +1,9 @@
-﻿"""Application settings loaded from environment variables."""
+"""Application settings loaded from environment variables."""
 
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import List, Dict, Optional, Tuple, Set, Union
 
 
 class Settings(BaseSettings):
@@ -60,7 +61,7 @@ class Settings(BaseSettings):
     # -- browsers reject the response. This allowlist is the safe default for
     # local Streamlit + React dev. Override via the CORS_ORIGINS_STR env var
     # (comma-separated, e.g. 'http://localhost:8501,http://localhost:3000').
-    cors_origins: list[str] = [
+    cors_origins: List[str] = [
         "http://localhost:8501",  # Streamlit
         "http://localhost:3000",  # next.js / react
         "http://127.0.0.1:8501",
@@ -80,13 +81,13 @@ class Settings(BaseSettings):
     notify_to_emails: str = ""
     """Comma-separated override for CORS origins. If set, takes precedence over cors_origins."""
 
-    def effective_cors_origins(self) -> list[str]:
+    def effective_cors_origins(self) -> List[str]:
         """Return CORS origins from the env override or the default list."""
         if self.cors_origins_str:
             return [o.strip() for o in self.cors_origins_str.split(",") if o.strip()]
         return self.cors_origins
 
 
-@lru_cache
+@lru_cache()
 def get_settings() -> Settings:
     return Settings()
