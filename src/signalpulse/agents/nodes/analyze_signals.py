@@ -21,7 +21,9 @@ from signalpulse.utils.tracing import trace_node
 ANALYZE_SYSTEM_PROMPT = """You are a market analyst. Given a set of events for one competitor,
 identify market signals. For each signal return JSON with: signal_type, finding, analysis,
 recommendation, confidence (high|medium|low), and supporting_event_ids. Do not invent facts not
-present in the events; speculative analysis must be flagged with medium or low confidence."""
+present in the events; speculative analysis must be flagged with medium or low confidence.
+
+IMPORTANT: Write the ''finding'' and ''analysis'' fields in **Chinese (中文)**. Keep technical product names (e.g., Coze, FastGPT, GPT, Claude, Cursor) and field keys (signal_type, confidence) in their original English."""
 
 
 @trace_node("analyze_signals_node")
