@@ -1,1 +1,10 @@
-# stop_all.ps1 — 杀 streamlit + scheduler $ErrorActionPreference = "Continue" Get-Process streamlit -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue $portProc = Get-NetTCPConnection -LocalPort 8501 -State Listen -ErrorAction SilentlyContinue if ($portProc) { Stop-Process -Id $portProc.OwningProcess -Force -ErrorAction SilentlyContinue } Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {     $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine     $cmd -and $cmd -like "*signalpulse.cli*scheduler*" } | Stop-Process -Force -ErrorAction SilentlyContinue Write-Host "[stop] all signalpulse processes killed"
+# stop_all.ps1 — 杀 streamlit + scheduler
+$ErrorActionPreference = "Continue"
+Get-Process streamlit -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+$portProc = Get-NetTCPConnection -LocalPort 8501 -State Listen -ErrorAction SilentlyContinue
+if ($portProc) { Stop-Process -Id $portProc.OwningProcess -Force -ErrorAction SilentlyContinue }
+Get-Process -Name "python" -ErrorAction SilentlyContinue | Where-Object {
+    $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" -ErrorAction SilentlyContinue).CommandLine
+    $cmd -and $cmd -like "*signalpulse.cli*scheduler*"
+} | Stop-Process -Force -ErrorAction SilentlyContinue
+Write-Host "[stop] all signalpulse processes killed"

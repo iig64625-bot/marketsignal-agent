@@ -1,1 +1,166 @@
-"""Run monitor v3: WebSocket reconnect message + dark mode friendly.""" from __future__ import annotations  import json  import streamlit as st from sqlalchemy import desc  from signalpulse.db.session import get_session from signalpulse.models.crawl_run import CrawlRun from signalpulse.models.eval_run import EvalRun from signalpulse.ui.i18n import t   _LIVE_RUN_HTML = r""" <div id="root" style="font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.6;background:#0e1117;color:#e0e0e0;padding:10px;border-radius:6px;border:1px solid #2a2d33;">__I18N_CONNECTING__</div> <script> (function () {   var host = "__HOST__";   var runId = "__RUN_ID__";   var wsUrl = (host ? (location.protocol === "https:" ? "wss://" : "ws://") + host : "ws://localhost:8000") + "/ws/runs/" + runId;   var root = document.getElementById("root");   var nodes = {};   var status = "pending";   var errorMessage = null;   var reconnectDelay = 2000;   var attempts = 0;    function render() {     var keys = Object.keys(nodes);     var html = "<div style='color:#818cf8;margin-bottom:6px;'>__I18N_LIVE__: " + runId + " &nbsp; __I18N_STATUS__: <b>" + status + "</b></div>";     if (errorMessage) {       html += "<div style='color:#ff8080;margin-bottom:6px;'>__I18N_ERROR__: " + errorMessage + "</div>";     }     if (keys.length === 0) {       html += "<div style='color:#888;'>__I18N_NO_NODES__</div>";     } else {       for (var i = 0; i < keys.length; i++) {         var n = nodes[keys[i]];         var color = n.status === "ok" ? "#5be37c" : (n.status === "error" ? "#ff8080" : "#f0c674");         var dur = n.duration_ms != null ? (" (" + n.duration_ms.toFixed(1) + " ms)") : "";         html += "<div><span style='color:" + color + ";'>" + (n.status === "ok" ? "__I18N_OK__" : n.status) + "</span>"           + " &nbsp; " + n.node + dur + "</div>";       }     }     html += "<div style='margin-top:8px;color:#888;font-size:11px;'>WS: " + wsUrl + "</div>";     root.innerHTML = html;   }    function connect() {     try {       var ws = new WebSocket(wsUrl);       ws.onopen = function () { attempts = 0; root.innerHTML = root.innerHTML.replace("__I18N_CONNECTING__", "__I18N_CONNECTED__"); };       ws.onmessage = function (ev) {         try {           var msg = JSON.parse(ev.data);           if (msg.type === "snapshot") {             var spans = (msg.trace && msg.trace.spans) || [];             for (var i = 0; i < spans.length; i++) {               var s = spans[i];               if (s.status === "ok" || s.status === "error") { nodes[s.node] = s; }             }           } else if (msg.type === "node") {             nodes[msg.span.node] = msg.span;           } else if (msg.type === "status") {             status = msg.status;             errorMessage = msg.error_message;           } else if (msg.type === "heartbeat") {             /* keep alive */           } else if (msg.type === "done") {             root.innerHTML += "<div style='margin-top:8px;color:#5be37c;'>__I18N_STREAM_CLOSED__</div>";             try { ws.close(); } catch (e) {}             return;           } else if (msg.type === "error") {             root.innerHTML += "<div style='margin-top:8px;color:#ff8080;'>__I18N_ERROR__: " + msg.detail + "</div>";           }           render();         } catch (e) {           root.innerHTML = "<div style='color:#ff8080;'>__I18N_PARSE_ERROR__: " + e + "</div>";         }       };       ws.onerror = function () {         root.innerHTML = "<div style='color:#ff8080;'>__I18N_DISCONNECTED__ (attempt " + (attempts + 1) + ")</div>";       };       ws.onclose = function () {         if (status !== "completed" && status !== "failed") {           attempts += 1;           var wait = reconnectDelay;           root.innerHTML = "<div style='color:#f0c674;'>__I18N_DISCONNECTED__ (attempt " + attempts + ")</div>";           setTimeout(connect, wait);         }       };     } catch (e) {       root.innerHTML = "<div style='color:#ff8080;'>__I18N_CONNECT_FAILED__: " + e + "</div>";       setTimeout(connect, reconnectDelay);     }   }   connect();   render(); })(); </script> """   def render_live_run(run_id: str) -> None:     """Render a live progress panel that subscribes to /ws/runs/__RUN_ID__."""     import streamlit.components.v1 as components     # Inject i18n values into JS template     html = _LIVE_RUN_HTML.replace("__RUN_ID__", run_id).replace("__HOST__", "window.location.host")     html = html.replace("__I18N_LIVE__", t("ws_live"))     html = html.replace("__I18N_STATUS__", t("ws_status"))     html = html.replace("__I18N_ERROR__", t("ws_error"))     html = html.replace("__I18N_NO_NODES__", t("ws_no_nodes"))     html = html.replace("__I18N_OK__", t("ws_ok"))     html = html.replace("__I18N_CONNECTING__", t("ws_connecting"))     html = html.replace("__I18N_CONNECTED__", t("ws_connected_js"))     html = html.replace("__I18N_STREAM_CLOSED__", t("ws_stream_closed"))     html = html.replace("__I18N_DISCONNECTED__", t("ws_disconnected"))     html = html.replace("__I18N_CONNECT_FAILED__", t("ws_connect_failed"))     html = html.replace("__I18N_PARSE_ERROR__", t("ws_parse_error"))     components.html(html, height=420)   def render_run_monitor() -> None:     st.subheader(t("run_history"))     st.caption(t("ws_connected"))      with get_session() as s:         runs = list(s.query(CrawlRun).order_by(desc(CrawlRun.started_at)).limit(20).all())     if not runs:         st.info(t("no_runs"))         return      options = [r.id for r in runs]     sel = st.selectbox(t("inspect_run"), options, index=0, key="run_monitor_select")     selected = next((r for r in runs if r.id == sel), None)     if selected is None:         return      st.markdown(f"**{t('status')}:** `{selected.status}` &nbsp; **{t('started_at')}:** `{selected.started_at}`")     if selected.error_message:         st.error(selected.error_message)      with get_session() as s:         row = (             s.query(EvalRun)             .filter_by(crawl_run_id=sel)             .order_by(desc(EvalRun.created_at))             .first()         )     if row is not None:         cols = st.columns(4)         cols[0].metric(t("citation_coverage"), f"{row.citation_coverage:.2%}")         cols[1].metric(t("unsupported_rate"), f"{row.unsupported_claim_rate:.2%}")         cols[2].metric(t("dedup_rate"), f"{row.dedup_rate:.2%}")         cols[3].metric(t("token_cost"), f"${row.token_cost_usd:.4f}")      st.markdown(f"**{t('live_progress')}**")     render_live_run(sel)   __all__ = ["render_live_run", "render_run_monitor"]   if __name__ == "__main__":     print(json.dumps({"html_chars": len(_LIVE_RUN_HTML), "preview": _LIVE_RUN_HTML[:200]}))
+"""Run monitor v3: WebSocket reconnect message + dark mode friendly."""
+from __future__ import annotations
+
+import json
+
+import streamlit as st
+from sqlalchemy import desc
+
+from signalpulse.db.session import get_session
+from signalpulse.models.crawl_run import CrawlRun
+from signalpulse.models.eval_run import EvalRun
+from signalpulse.ui.i18n import t
+
+
+_LIVE_RUN_HTML = r"""
+<div id="root" style="font-family:ui-monospace,Consolas,monospace;font-size:13px;line-height:1.6;background:#0e1117;color:#e0e0e0;padding:10px;border-radius:6px;border:1px solid #2a2d33;">__I18N_CONNECTING__</div>
+<script>
+(function () {
+  var host = "__HOST__";
+  var runId = "__RUN_ID__";
+  var wsUrl = (host ? (location.protocol === "https:" ? "wss://" : "ws://") + host : "ws://localhost:8000") + "/ws/runs/" + runId;
+  var root = document.getElementById("root");
+  var nodes = {};
+  var status = "pending";
+  var errorMessage = null;
+  var reconnectDelay = 2000;
+  var attempts = 0;
+
+  function render() {
+    var keys = Object.keys(nodes);
+    var html = "<div style='color:#818cf8;margin-bottom:6px;'>__I18N_LIVE__: " + runId + " &nbsp; __I18N_STATUS__: <b>" + status + "</b></div>";
+    if (errorMessage) {
+      html += "<div style='color:#ff8080;margin-bottom:6px;'>__I18N_ERROR__: " + errorMessage + "</div>";
+    }
+    if (keys.length === 0) {
+      html += "<div style='color:#888;'>__I18N_NO_NODES__</div>";
+    } else {
+      for (var i = 0; i < keys.length; i++) {
+        var n = nodes[keys[i]];
+        var color = n.status === "ok" ? "#5be37c" : (n.status === "error" ? "#ff8080" : "#f0c674");
+        var dur = n.duration_ms != null ? (" (" + n.duration_ms.toFixed(1) + " ms)") : "";
+        html += "<div><span style='color:" + color + ";'>" + (n.status === "ok" ? "__I18N_OK__" : n.status) + "</span>"
+          + " &nbsp; " + n.node + dur + "</div>";
+      }
+    }
+    html += "<div style='margin-top:8px;color:#888;font-size:11px;'>WS: " + wsUrl + "</div>";
+    root.innerHTML = html;
+  }
+
+  function connect() {
+    try {
+      var ws = new WebSocket(wsUrl);
+      ws.onopen = function () { attempts = 0; root.innerHTML = root.innerHTML.replace("__I18N_CONNECTING__", "__I18N_CONNECTED__"); };
+      ws.onmessage = function (ev) {
+        try {
+          var msg = JSON.parse(ev.data);
+          if (msg.type === "snapshot") {
+            var spans = (msg.trace && msg.trace.spans) || [];
+            for (var i = 0; i < spans.length; i++) {
+              var s = spans[i];
+              if (s.status === "ok" || s.status === "error") { nodes[s.node] = s; }
+            }
+          } else if (msg.type === "node") {
+            nodes[msg.span.node] = msg.span;
+          } else if (msg.type === "status") {
+            status = msg.status;
+            errorMessage = msg.error_message;
+          } else if (msg.type === "heartbeat") {
+            /* keep alive */
+          } else if (msg.type === "done") {
+            root.innerHTML += "<div style='margin-top:8px;color:#5be37c;'>__I18N_STREAM_CLOSED__</div>";
+            try { ws.close(); } catch (e) {}
+            return;
+          } else if (msg.type === "error") {
+            root.innerHTML += "<div style='margin-top:8px;color:#ff8080;'>__I18N_ERROR__: " + msg.detail + "</div>";
+          }
+          render();
+        } catch (e) {
+          root.innerHTML = "<div style='color:#ff8080;'>__I18N_PARSE_ERROR__: " + e + "</div>";
+        }
+      };
+      ws.onerror = function () {
+        root.innerHTML = "<div style='color:#ff8080;'>__I18N_DISCONNECTED__ (attempt " + (attempts + 1) + ")</div>";
+      };
+      ws.onclose = function () {
+        if (status !== "completed" && status !== "failed") {
+          attempts += 1;
+          var wait = reconnectDelay;
+          root.innerHTML = "<div style='color:#f0c674;'>__I18N_DISCONNECTED__ (attempt " + attempts + ")</div>";
+          setTimeout(connect, wait);
+        }
+      };
+    } catch (e) {
+      root.innerHTML = "<div style='color:#ff8080;'>__I18N_CONNECT_FAILED__: " + e + "</div>";
+      setTimeout(connect, reconnectDelay);
+    }
+  }
+  connect();
+  render();
+})();
+</script>
+"""
+
+
+def render_live_run(run_id: str) -> None:
+    """Render a live progress panel that subscribes to /ws/runs/__RUN_ID__."""
+    import streamlit.components.v1 as components
+    # Inject i18n values into JS template
+    html = _LIVE_RUN_HTML.replace("__RUN_ID__", run_id).replace("__HOST__", "window.location.host")
+    html = html.replace("__I18N_LIVE__", t("ws_live"))
+    html = html.replace("__I18N_STATUS__", t("ws_status"))
+    html = html.replace("__I18N_ERROR__", t("ws_error"))
+    html = html.replace("__I18N_NO_NODES__", t("ws_no_nodes"))
+    html = html.replace("__I18N_OK__", t("ws_ok"))
+    html = html.replace("__I18N_CONNECTING__", t("ws_connecting"))
+    html = html.replace("__I18N_CONNECTED__", t("ws_connected_js"))
+    html = html.replace("__I18N_STREAM_CLOSED__", t("ws_stream_closed"))
+    html = html.replace("__I18N_DISCONNECTED__", t("ws_disconnected"))
+    html = html.replace("__I18N_CONNECT_FAILED__", t("ws_connect_failed"))
+    html = html.replace("__I18N_PARSE_ERROR__", t("ws_parse_error"))
+    components.html(html, height=420)
+
+
+def render_run_monitor() -> None:
+    st.subheader(t("run_history"))
+    st.caption(t("ws_connected"))
+
+    with get_session() as s:
+        runs = list(s.query(CrawlRun).order_by(desc(CrawlRun.started_at)).limit(20).all())
+    if not runs:
+        st.info(t("no_runs"))
+        return
+
+    options = [r.id for r in runs]
+    sel = st.selectbox(t("inspect_run"), options, index=0, key="run_monitor_select")
+    selected = next((r for r in runs if r.id == sel), None)
+    if selected is None:
+        return
+
+    st.markdown(f"**{t('status')}:** `{selected.status}` &nbsp; **{t('started_at')}:** `{selected.started_at}`")
+    if selected.error_message:
+        st.error(selected.error_message)
+
+    with get_session() as s:
+        row = (
+            s.query(EvalRun)
+            .filter_by(crawl_run_id=sel)
+            .order_by(desc(EvalRun.created_at))
+            .first()
+        )
+    if row is not None:
+        cols = st.columns(4)
+        cols[0].metric(t("citation_coverage"), f"{row.citation_coverage:.2%}")
+        cols[1].metric(t("unsupported_rate"), f"{row.unsupported_claim_rate:.2%}")
+        cols[2].metric(t("dedup_rate"), f"{row.dedup_rate:.2%}")
+        cols[3].metric(t("token_cost"), f"${row.token_cost_usd:.4f}")
+
+    st.markdown(f"**{t('live_progress')}**")
+    render_live_run(sel)
+
+
+__all__ = ["render_live_run", "render_run_monitor"]
+
+
+if __name__ == "__main__":
+    print(json.dumps({"html_chars": len(_LIVE_RUN_HTML), "preview": _LIVE_RUN_HTML[:200]}))

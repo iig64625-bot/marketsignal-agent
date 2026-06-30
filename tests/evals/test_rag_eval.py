@@ -1,1 +1,91 @@
-"""Tests for the RAG evaluation suite.""" from __future__ import annotations  import pytest  from signalpulse.evals.rag_eval import (     DEFAULT_GOLD_PATH,     GoldItem,     _fallback_retrieve,     _keyword_coverage,     evaluate,     load_gold_set, )   def test_gold_set_loads() -> None:     gold = load_gold_set()     assert len(gold) >= 10     assert all(isinstance(g, GoldItem) for g in gold)     cats = {g.category for g in gold}     assert len(cats) >= 3  # at least 3 categories   def test_gold_set_file_exists() -> None:     assert DEFAULT_GOLD_PATH.exists()   def test_keyword_coverage_basic() -> None:     text = "Coze hired a VP of Engineering for the agent platform."     cov = _keyword_coverage(["coze", "vp", "engineering"], text)     assert cov == pytest.approx(1.0)   def test_keyword_coverage_partial() -> None:     text = "Coze hired someone new today."     cov = _keyword_coverage(["coze", "vp", "engineering"], text)     assert 0.0 < cov < 1.0   def test_keyword_coverage_empty() -> None:     assert _keyword_coverage([], "anything") == 0.0   def test_keyword_coverage_case_insensitive() -> None:     text = "FASTGPT has multi-modal RAG."     cov = _keyword_coverage(["fastgpt", "multi-modal"], text)     assert cov == pytest.approx(1.0)   def test_evaluate_empty_goldset_raises() -> None:     with pytest.raises(ValueError, match="gold_set is empty"):         evaluate([])   def test_evaluate_with_custom_retriever(tmp_data_dir: str) -> None:     """A retriever that always returns the expected company should score 100%."""     gold = [         GoldItem(question="q1", expected_keywords=["x"], expected_company="Coze", category="hiring"),         GoldItem(question="q2", expected_keywords=["y"], expected_company="FastGPT", category="product"),     ]      def retriever(q: str, k: int = 5):         if "Coze" in [g.expected_company for g in gold if g.question == q][0:1] or q == "q1":             return [{"company_name": "Coze", "text": "x", "score": 0.9, "rank": 1}]         return [{"company_name": "FastGPT", "text": "y", "score": 0.9, "rank": 1}]      report = evaluate(gold, retriever=retriever)     assert report.total == 2     assert report.recall_at_1 == pytest.approx(1.0)     assert report.mrr == pytest.approx(1.0)     assert "hiring" in report.by_category     assert "product" in report.by_category   def test_evaluate_with_broken_retriever_falls_back(tmp_data_dir: str) -> None:     gold = [GoldItem(question="what about coze pricing?", expected_keywords=["per-seat"], expected_company="Coze", category="pricing")]      def broken(q: str, k: int = 5):         raise RuntimeError("retriever down")      report = evaluate(gold, retriever=broken)     # Fallback should still produce some result (possibly 0% if no docs)     assert report.total == 1     assert 0.0 <= report.mrr <= 1.0   def test_fallback_retrieve_returns_list(tmp_data_dir: str) -> None:     hits = _fallback_retrieve("coze vp engineering", {"coze": "Coze", "fastgpt": "FastGPT"}, k=3)     # Even if the DB has no docs, this should not raise     assert isinstance(hits, list)     assert len(hits) <= 3
+"""Tests for the RAG evaluation suite."""
+from __future__ import annotations
+
+import pytest
+
+from signalpulse.evals.rag_eval import (
+    DEFAULT_GOLD_PATH,
+    GoldItem,
+    _fallback_retrieve,
+    _keyword_coverage,
+    evaluate,
+    load_gold_set,
+)
+
+
+def test_gold_set_loads() -> None:
+    gold = load_gold_set()
+    assert len(gold) >= 10
+    assert all(isinstance(g, GoldItem) for g in gold)
+    cats = {g.category for g in gold}
+    assert len(cats) >= 3  # at least 3 categories
+
+
+def test_gold_set_file_exists() -> None:
+    assert DEFAULT_GOLD_PATH.exists()
+
+
+def test_keyword_coverage_basic() -> None:
+    text = "Coze hired a VP of Engineering for the agent platform."
+    cov = _keyword_coverage(["coze", "vp", "engineering"], text)
+    assert cov == pytest.approx(1.0)
+
+
+def test_keyword_coverage_partial() -> None:
+    text = "Coze hired someone new today."
+    cov = _keyword_coverage(["coze", "vp", "engineering"], text)
+    assert 0.0 < cov < 1.0
+
+
+def test_keyword_coverage_empty() -> None:
+    assert _keyword_coverage([], "anything") == 0.0
+
+
+def test_keyword_coverage_case_insensitive() -> None:
+    text = "FASTGPT has multi-modal RAG."
+    cov = _keyword_coverage(["fastgpt", "multi-modal"], text)
+    assert cov == pytest.approx(1.0)
+
+
+def test_evaluate_empty_goldset_raises() -> None:
+    with pytest.raises(ValueError, match="gold_set is empty"):
+        evaluate([])
+
+
+def test_evaluate_with_custom_retriever(tmp_data_dir: str) -> None:
+    """A retriever that always returns the expected company should score 100%."""
+    gold = [
+        GoldItem(question="q1", expected_keywords=["x"], expected_company="Coze", category="hiring"),
+        GoldItem(question="q2", expected_keywords=["y"], expected_company="FastGPT", category="product"),
+    ]
+
+    def retriever(q: str, k: int = 5):
+        if "Coze" in [g.expected_company for g in gold if g.question == q][0:1] or q == "q1":
+            return [{"company_name": "Coze", "text": "x", "score": 0.9, "rank": 1}]
+        return [{"company_name": "FastGPT", "text": "y", "score": 0.9, "rank": 1}]
+
+    report = evaluate(gold, retriever=retriever)
+    assert report.total == 2
+    assert report.recall_at_1 == pytest.approx(1.0)
+    assert report.mrr == pytest.approx(1.0)
+    assert "hiring" in report.by_category
+    assert "product" in report.by_category
+
+
+def test_evaluate_with_broken_retriever_falls_back(tmp_data_dir: str) -> None:
+    gold = [GoldItem(question="what about coze pricing?", expected_keywords=["per-seat"], expected_company="Coze", category="pricing")]
+
+    def broken(q: str, k: int = 5):
+        raise RuntimeError("retriever down")
+
+    report = evaluate(gold, retriever=broken)
+    # Fallback should still produce some result (possibly 0% if no docs)
+    assert report.total == 1
+    assert 0.0 <= report.mrr <= 1.0
+
+
+def test_fallback_retrieve_returns_list(tmp_data_dir: str) -> None:
+    hits = _fallback_retrieve("coze vp engineering", {"coze": "Coze", "fastgpt": "FastGPT"}, k=3)
+    # Even if the DB has no docs, this should not raise
+    assert isinstance(hits, list)
+    assert len(hits) <= 3

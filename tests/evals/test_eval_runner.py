@@ -1,1 +1,138 @@
-import json  import pytest  from signalpulse.config.settings import get_settings from signalpulse.evals.eval_runner import percentile from signalpulse.evals.faithfulness import (     FaithfulnessResult,     faithfulness_score,     keyword_overlap_score,     llm_judge_score, ) from signalpulse.evals.latency import measure_latency, p50_p95_from_trace from signalpulse.evals.token_cost import TokenUsageAccumulator, token_cost   def test_keyword_overlap_identical_is_one():     s = "the agent scored a high citation coverage"     assert keyword_overlap_score(s, s) == pytest.approx(1.0)   def test_keyword_overlap_unrelated_is_low():     s = "agent scored citation coverage"     src = "database migration was successful yesterday"     assert keyword_overlap_score(s, src) < 0.2   def test_keyword_overlap_empty_is_zero():     assert keyword_overlap_score("", "anything") == 0.0     assert keyword_overlap_score("anything", "") == 0.0   def test_keyword_overlap_ignores_short_and_stopwords():     # All tokens <4 chars or are stopwords, so tokenize returns empty     s = "the a an of in"     assert keyword_overlap_score(s, "the a an of in") == 0.0   def test_llm_judge_returns_none_without_key(monkeypatch):     # Force all provider keys to empty so .env values are overridden     for _key in ("OPENAI_API_KEY", "QWEN_API_KEY", "ANTHROPIC_API_KEY",                  "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "LLM_API_KEY"):         monkeypatch.setenv(_key, "")     get_settings.cache_clear()     assert llm_judge_score("summary", "source") is None     get_settings.cache_clear()   def test_faithfulness_falls_back_to_overlap(monkeypatch):     for _key in ("OPENAI_API_KEY", "QWEN_API_KEY", "ANTHROPIC_API_KEY",                  "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "LLM_API_KEY"):         monkeypatch.setenv(_key, "")     get_settings.cache_clear()     s = "the agent scored a high citation coverage"     result = faithfulness_score(s, s)     assert isinstance(result, FaithfulnessResult)     assert result.score == pytest.approx(1.0)     assert result.llm_score is None     assert "deterministic" in result.notes     get_settings.cache_clear()   def test_percentile_basic():     assert percentile([1, 2, 3, 4, 5], 50) == pytest.approx(3.0)     assert percentile([1, 2, 3, 4, 5], 100) == pytest.approx(5.0)     assert percentile([], 50) == 0.0   def test_percentile_interpolates():     # p50 of [1, 2, 3, 4] = (2+3)/2 = 2.5     assert percentile([1, 2, 3, 4], 50) == pytest.approx(2.5)   def test_measure_latency_records_ms():     with measure_latency() as state:         # Burn a few microseconds         sum(range(1000))     assert "elapsed_ms" in state     assert state["elapsed_ms"] >= 0.0   def test_p50_p95_from_trace_missing(tmp_path, monkeypatch):     monkeypatch.chdir(tmp_path)     res = p50_p95_from_trace("no-such-run")     assert res == {"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0}   def test_p50_p95_from_trace_real(tmp_path, monkeypatch):     monkeypatch.chdir(tmp_path)     (tmp_path / "data" / "traces").mkdir(parents=True)     spans = [         {"node": "a", "duration_ms": 10.0},         {"node": "b", "duration_ms": 50.0},         {"node": "c", "duration_ms": 100.0},         {"node": "d", "duration_ms": 500.0},     ]     (tmp_path / "data" / "traces" / "rid.json").write_text(         json.dumps({"spans": spans}), encoding="utf-8"     )     res = p50_p95_from_trace("rid")     assert res["n"] == 4     assert res["max"] == 500.0     assert res["p50"] > 0     assert res["p95"] > 0   def test_token_cost_known_model():     cost = token_cost(tokens_in=1000, tokens_out=500, model="gpt-4o-mini")     # 1.0 * 0.00015 + 0.5 * 0.0006 = 0.00045     assert cost == pytest.approx(0.00045)   def test_token_cost_unknown_model_falls_back():     cost = token_cost(tokens_in=1000, tokens_out=500, model="totally-fake-model")     assert cost > 0   def test_token_usage_accumulator_basic():     cb = TokenUsageAccumulator()     # Simulate a callback with llm_output dict     class _R:         llm_output = {"token_usage": {"prompt_tokens": 100, "completion_tokens": 50}}     cb.on_llm_end(_R())     cb.on_llm_end(_R())     assert cb.tokens_in == 200     assert cb.tokens_out == 100     assert cb.n_calls == 2     assert cb.cost_for_model("gpt-4o-mini") > 0   def test_token_usage_accumulator_handles_missing_usage():     cb = TokenUsageAccumulator()     class _R:         llm_output = None     cb.on_llm_end(_R())     assert cb.tokens_in == 0     assert cb.tokens_out == 0     assert cb.n_calls == 1
+import json
+
+import pytest
+
+from signalpulse.config.settings import get_settings
+from signalpulse.evals.eval_runner import percentile
+from signalpulse.evals.faithfulness import (
+    FaithfulnessResult,
+    faithfulness_score,
+    keyword_overlap_score,
+    llm_judge_score,
+)
+from signalpulse.evals.latency import measure_latency, p50_p95_from_trace
+from signalpulse.evals.token_cost import TokenUsageAccumulator, token_cost
+
+
+def test_keyword_overlap_identical_is_one():
+    s = "the agent scored a high citation coverage"
+    assert keyword_overlap_score(s, s) == pytest.approx(1.0)
+
+
+def test_keyword_overlap_unrelated_is_low():
+    s = "agent scored citation coverage"
+    src = "database migration was successful yesterday"
+    assert keyword_overlap_score(s, src) < 0.2
+
+
+def test_keyword_overlap_empty_is_zero():
+    assert keyword_overlap_score("", "anything") == 0.0
+    assert keyword_overlap_score("anything", "") == 0.0
+
+
+def test_keyword_overlap_ignores_short_and_stopwords():
+    # All tokens <4 chars or are stopwords, so tokenize returns empty
+    s = "the a an of in"
+    assert keyword_overlap_score(s, "the a an of in") == 0.0
+
+
+def test_llm_judge_returns_none_without_key(monkeypatch):
+    # Force all provider keys to empty so .env values are overridden
+    for _key in ("OPENAI_API_KEY", "QWEN_API_KEY", "ANTHROPIC_API_KEY",
+                 "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "LLM_API_KEY"):
+        monkeypatch.setenv(_key, "")
+    get_settings.cache_clear()
+    assert llm_judge_score("summary", "source") is None
+    get_settings.cache_clear()
+
+
+def test_faithfulness_falls_back_to_overlap(monkeypatch):
+    for _key in ("OPENAI_API_KEY", "QWEN_API_KEY", "ANTHROPIC_API_KEY",
+                 "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "LLM_API_KEY"):
+        monkeypatch.setenv(_key, "")
+    get_settings.cache_clear()
+    s = "the agent scored a high citation coverage"
+    result = faithfulness_score(s, s)
+    assert isinstance(result, FaithfulnessResult)
+    assert result.score == pytest.approx(1.0)
+    assert result.llm_score is None
+    assert "deterministic" in result.notes
+    get_settings.cache_clear()
+
+
+def test_percentile_basic():
+    assert percentile([1, 2, 3, 4, 5], 50) == pytest.approx(3.0)
+    assert percentile([1, 2, 3, 4, 5], 100) == pytest.approx(5.0)
+    assert percentile([], 50) == 0.0
+
+
+def test_percentile_interpolates():
+    # p50 of [1, 2, 3, 4] = (2+3)/2 = 2.5
+    assert percentile([1, 2, 3, 4], 50) == pytest.approx(2.5)
+
+
+def test_measure_latency_records_ms():
+    with measure_latency() as state:
+        # Burn a few microseconds
+        sum(range(1000))
+    assert "elapsed_ms" in state
+    assert state["elapsed_ms"] >= 0.0
+
+
+def test_p50_p95_from_trace_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    res = p50_p95_from_trace("no-such-run")
+    assert res == {"p50": 0.0, "p95": 0.0, "max": 0.0, "n": 0.0}
+
+
+def test_p50_p95_from_trace_real(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data" / "traces").mkdir(parents=True)
+    spans = [
+        {"node": "a", "duration_ms": 10.0},
+        {"node": "b", "duration_ms": 50.0},
+        {"node": "c", "duration_ms": 100.0},
+        {"node": "d", "duration_ms": 500.0},
+    ]
+    (tmp_path / "data" / "traces" / "rid.json").write_text(
+        json.dumps({"spans": spans}), encoding="utf-8"
+    )
+    res = p50_p95_from_trace("rid")
+    assert res["n"] == 4
+    assert res["max"] == 500.0
+    assert res["p50"] > 0
+    assert res["p95"] > 0
+
+
+def test_token_cost_known_model():
+    cost = token_cost(tokens_in=1000, tokens_out=500, model="gpt-4o-mini")
+    # 1.0 * 0.00015 + 0.5 * 0.0006 = 0.00045
+    assert cost == pytest.approx(0.00045)
+
+
+def test_token_cost_unknown_model_falls_back():
+    cost = token_cost(tokens_in=1000, tokens_out=500, model="totally-fake-model")
+    assert cost > 0
+
+
+def test_token_usage_accumulator_basic():
+    cb = TokenUsageAccumulator()
+    # Simulate a callback with llm_output dict
+    class _R:
+        llm_output = {"token_usage": {"prompt_tokens": 100, "completion_tokens": 50}}
+    cb.on_llm_end(_R())
+    cb.on_llm_end(_R())
+    assert cb.tokens_in == 200
+    assert cb.tokens_out == 100
+    assert cb.n_calls == 2
+    assert cb.cost_for_model("gpt-4o-mini") > 0
+
+
+def test_token_usage_accumulator_handles_missing_usage():
+    cb = TokenUsageAccumulator()
+    class _R:
+        llm_output = None
+    cb.on_llm_end(_R())
+    assert cb.tokens_in == 0
+    assert cb.tokens_out == 0
+    assert cb.n_calls == 1

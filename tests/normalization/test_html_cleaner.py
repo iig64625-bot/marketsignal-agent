@@ -1,1 +1,31 @@
-"""Tests for the HTML -> plain-text cleaner."""  from __future__ import annotations  from signalpulse.normalization.html_cleaner import clean_html   def test_clean_html_strips_scripts_and_nav():     html = """     <html><head><title>X</title></head>     <body>       <script>alert(1)</script>       <nav>menu</nav>       <article><p>Hello <b>world</b></p></article>       <footer>end</footer>     </body></html>     """     text = clean_html(html)     assert "alert(1)" not in text     assert "Hello" in text     assert "world" in text   def test_clean_html_handles_empty():     assert clean_html("") == ""     assert clean_html("<html></html>") == ""   def test_clean_html_handles_plain_text():     """If the input is plain text (no tags), it should pass through."""     assert clean_html("just words") == "just words"
+﻿"""Tests for the HTML -> plain-text cleaner."""
+
+from __future__ import annotations
+
+from signalpulse.normalization.html_cleaner import clean_html
+
+
+def test_clean_html_strips_scripts_and_nav():
+    html = """
+    <html><head><title>X</title></head>
+    <body>
+      <script>alert(1)</script>
+      <nav>menu</nav>
+      <article><p>Hello <b>world</b></p></article>
+      <footer>end</footer>
+    </body></html>
+    """
+    text = clean_html(html)
+    assert "alert(1)" not in text
+    assert "Hello" in text
+    assert "world" in text
+
+
+def test_clean_html_handles_empty():
+    assert clean_html("") == ""
+    assert clean_html("<html></html>") == ""
+
+
+def test_clean_html_handles_plain_text():
+    """If the input is plain text (no tags), it should pass through."""
+    assert clean_html("just words") == "just words"

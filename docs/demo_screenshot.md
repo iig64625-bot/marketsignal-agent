@@ -1,1 +1,215 @@
-# SignalPulse — Demo 输出样例  > 本文用文字"截图"展示 sample pipeline 的真实输出。所有内容都可以用 `python -m signalpulse run --use-sample-dataset` 现场复现。  ## 1. CLI 运行输出  ```text $ python -m signalpulse run --use-sample-dataset  16:48:02.811 | INFO  | __main__:main:28 - Starting pipeline: config=configs/competitors.ai-agent.yaml, sample_dataset=True 16:48:02.811 | INFO  | marketsignal.agents.nodes.load_sample:load_sample_node:34 - load_sample: inserted 9 events + 9 signals 16:48:02.812 | INFO  | marketsignal.reporting.render_markdown:render_weekly_report - Rendered weekly report (5378 chars) 16:48:02.813 | INFO  | marketsignal.reporting.render_markdown:render_battlecard - Rendered battlecard for Coze (2296 chars) 16:48:02.814 | INFO  | marketsignal.reporting.render_markdown:render_battlecard - Rendered battlecard for FastGPT (1688 chars) 16:48:02.830 | INFO  | marketsignal.citation.checker:check_report_citations - 77 claims extracted, 36 supported 16:48:02.835 | INFO  | marketsignal.agents.nodes.run_evals:run_evals_node:40 - eval summary: cov=0.42 unsup=0.58 16:48:02.840 | INFO  | marketsignal.cli:_run_pipeline:59 - Pipeline completed: status=completed warnings=0 16:48:02.840 | INFO  | marketsignal.cli:_run_pipeline:63 - Metrics: {     "citation_coverage": 0.47,     "unsupported_claim_rate": 0.53,     "total_claims": 77,     "supported_claims": 36,     "dedup_rate": 0.0 } ```  ## 2. 周报样例（`data/reports/weekly_<run_id>.md`）  ```markdown # Weekly Competitive Intelligence Report **Target:** Dify  |  **Date:** 2026-06-23  |  **Signals:** 9 ## Executive Summary This week the pipeline observed **9** market signals across **2** competitors of **Dify**. Of these, **6** are high-confidence.  ### Signals by Type | signal_type | count | |---|---| | product | 4 | | risk | 2 | | pricing | 1 | | gtm | 1 | | hiring | 1 |  ### Signals by Competitor | competitor | count | |---|---| | Coze | 5 | | FastGPT | 4 |  ## Key Changes by Competitor ### Coze - **[pricing]** Coze moved to a per-seat model ... _(confidence: high)_   - Analysis: Per-seat pricing improves land-and-expand dynamics ... - **[product]** ByteDance open-sourced the coze repository under Apache 2.0 ... _(confidence: medium)_   - Analysis: Open-sourcing is a community-building move ...  ## Recommendations - **Coze** — Dify should publish a TCO comparison versus Coze ... - **FastGPT** — Dify should highlight SOC2 Type II coverage ...  ## Citations _(citations populated by Phase 6 check_citations node)_ ```  ## 3. Battlecard 样例（`data/reports/battlecard_Coze_<run_id>.md`）  ```markdown # Battlecard: Coze _vs Dify  |  2026-06-23  |  5 signals_  ## Positioning _Why Coze wins:_ - ByteDance open-sourced the coze repository under Apache 2.0, accepting community contributions. - Coze is investing heavily in workflow automation, matching where enterprise buyers want to consolidate tooling.  ## Key Strengths - ByteDance open-sourced the coze repository under Apache 2.0 ... - Coze is investing heavily in workflow automation ... - Coze moved to a per-seat model that resembles the classic SaaS playbook ...  ## Recent Moves - Coze is hiring a VP of Engineering for its agent platform ... - Coze moved to a per-seat model that resembles the classic SaaS playbook ... - ByteDance open-sourced the coze repository under Apache 2.0 ... - Coze launched native CRM connectors (Salesforce / HubSpot / Zoho) ... - Coze is investing heavily in workflow automation ...  ## Risks & Weaknesses - Coze is hiring a VP of Engineering for its agent platform ... - Coze launched native CRM connectors ...  ## Suggested Sales Response - Watch the new VP''s first 90 days of public appearances ... - Dify should publish a TCO comparison versus Coze for a 50-seat team ... - Audit the open-source release for enterprise-incompatible licensing terms ...  ## Attack Points _(no LLM-generated attack points; enable an LLM provider for richer cards)_  ## Evidence Sources _(citations populated by Phase 6)_ ```  > **开启 LLM 后**（配 `OPENAI_API_KEY` 跑 `python -m signalpulse run`），"Attack Points" 一节会变成： > > ```markdown > ## Attack Points > **TL;DR:** Coze is closing the gap on enterprise features but trails Dify on transparency. > **Elevator pitch:** We''re the open, auditable alternative when enterprise buyers push back on black-box vendors. > > - Coze''s VP-of-Eng hire signals an inflection; Dify should anticipate aggressive roadmap _(confidence: 75%)_ — Recent hire announcement > - Per-seat pricing undercuts Dify''s usage model; Dify should arm sales with a TCO calculator _(confidence: 80%)_ — Pricing change observed > - The Apache 2.0 release may have hidden restrictions; Dify should publish a license comparison _(confidence: 60%)_ — Open-source release notes > > **Talk tracks:** > - _When:_ Prospect asks about pricing predictability → _Say:_ "Coze''s per-seat model sounds predictable but in our experience enterprise teams hit expansion costs 3x the per-seat quote by month 9..." > ```  ## 4. Eval 指标（`data/evals/eval_<run_id>.json`）  ```json {   "run_id": "b54871d7a44f",   "citation_coverage": 0.47,   "unsupported_claim_rate": 0.53,   "total_claims": 77,   "supported_claims": 36,   "total_normalized_docs": 9,   "unique_content_hashes": 9,   "node_latency_ms": {     "generate_weekly_report_node": 11.8,     "generate_battlecards_node": 11.4,     "check_citations_node": 768.3,     "run_evals_node": 11.8   },   "generated_at": "2026-06-23T16:48:03Z" } ```  ## 5. Trace 文件（`data/traces/<run_id>.json`）  ```json {   "run_id": "b54871d7a44f",   "started_at": "2026-06-23T16:48:02Z",   "finished_at": "2026-06-23T16:48:03Z",   "status": "completed",   "spans": [     {       "node": "load_sample_node",       "entered_at": "...",       "exited_at": "...",       "duration_ms": 12.4,       "status": "ok"     },     {       "node": "generate_weekly_report_node",       "duration_ms": 11.8,       "status": "ok"     },     ...   ] } ```  ## 6. Streamlit UI 截图（文字版）  ``` ┌──────────────────────────────────────────────────────────────────────┐ │  ⚙️ SignalPulse                       ┌──────────────────────────┐  │ │  AI Competitive Intelligence           │   SignalPulse     │  │ │                                        │   ──────────────         │  │ │  Run                                    │                          │  │ │  Competitor config: [ai-agent.yaml ▼]   │  AI Competitive          │  │ │  ☑ Use sample dataset                   │  Intelligence - weekly   │  │ │  [🚀 Run pipeline]                      │  reports, sales cards.   │  │ │                                        │                          │  │ │  v0.1.0                                │  [Weekly][Battle][Eval]  │  │ │                                        │                          │  │ │                                        │  📑 Reports (weekly)     │  │ │                                        │  ┌─────────────────────┐ │  │ │                                        │  │ Weekly 2026-06-23   │ │  │ │                                        │  └─────────────────────┘ │  │ └────────────────────────────────────────┴──────────────────────────┘ ```  ## 7. FastAPI 文档  启动 `uvicorn marketsignal.api.app:create_app --factory` 后访问 http://localhost:8000/docs：  | 端点 | 方法 | 说明 | |---|---|---| | `/health` | GET | liveness probe | | `/ready` | GET | readiness (DB + vector store) | | `/runs` | GET | 列出最近 crawl runs | | `/runs` | POST | 启动新 run（background） | | `/runs/{id}` | GET | 单个 run 详情 + metrics | | `/reports` | GET | 列出报告（可按 type 过滤） | | `/reports/{id}` | GET | 报告详情 + markdown 内容 | | `/reports/{id}/markdown` | GET | 纯 markdown 响应 | | `/reports/{id}/download` | GET | 文件下载 |  ---  **现场复现步骤**： ```bash # 1. 跑 sample pipeline python -m signalpulse run --use-sample-dataset  # 2. 启动 API uvicorn marketsignal.api.app:create_app --factory  # 3. 启动 UI streamlit run src/marketsignal/ui/app.py ```
+# SignalPulse — Demo 输出样例
+
+> 本文用文字"截图"展示 sample pipeline 的真实输出。所有内容都可以用 `python -m signalpulse run --use-sample-dataset` 现场复现。
+
+## 1. CLI 运行输出
+
+```text
+$ python -m signalpulse run --use-sample-dataset
+
+16:48:02.811 | INFO  | __main__:main:28 - Starting pipeline: config=configs/competitors.ai-agent.yaml, sample_dataset=True
+16:48:02.811 | INFO  | marketsignal.agents.nodes.load_sample:load_sample_node:34 - load_sample: inserted 9 events + 9 signals
+16:48:02.812 | INFO  | marketsignal.reporting.render_markdown:render_weekly_report - Rendered weekly report (5378 chars)
+16:48:02.813 | INFO  | marketsignal.reporting.render_markdown:render_battlecard - Rendered battlecard for Coze (2296 chars)
+16:48:02.814 | INFO  | marketsignal.reporting.render_markdown:render_battlecard - Rendered battlecard for FastGPT (1688 chars)
+16:48:02.830 | INFO  | marketsignal.citation.checker:check_report_citations - 77 claims extracted, 36 supported
+16:48:02.835 | INFO  | marketsignal.agents.nodes.run_evals:run_evals_node:40 - eval summary: cov=0.42 unsup=0.58
+16:48:02.840 | INFO  | marketsignal.cli:_run_pipeline:59 - Pipeline completed: status=completed warnings=0
+16:48:02.840 | INFO  | marketsignal.cli:_run_pipeline:63 - Metrics: {
+    "citation_coverage": 0.47,
+    "unsupported_claim_rate": 0.53,
+    "total_claims": 77,
+    "supported_claims": 36,
+    "dedup_rate": 0.0
+}
+```
+
+## 2. 周报样例（`data/reports/weekly_<run_id>.md`）
+
+```markdown
+# Weekly Competitive Intelligence Report
+**Target:** Dify  |  **Date:** 2026-06-23  |  **Signals:** 9
+## Executive Summary
+This week the pipeline observed **9** market signals across **2** competitors of **Dify**. Of these, **6** are high-confidence.
+
+### Signals by Type
+| signal_type | count |
+|---|---|
+| product | 4 |
+| risk | 2 |
+| pricing | 1 |
+| gtm | 1 |
+| hiring | 1 |
+
+### Signals by Competitor
+| competitor | count |
+|---|---|
+| Coze | 5 |
+| FastGPT | 4 |
+
+## Key Changes by Competitor
+### Coze
+- **[pricing]** Coze moved to a per-seat model ... _(confidence: high)_
+  - Analysis: Per-seat pricing improves land-and-expand dynamics ...
+- **[product]** ByteDance open-sourced the coze repository under Apache 2.0 ... _(confidence: medium)_
+  - Analysis: Open-sourcing is a community-building move ...
+
+## Recommendations
+- **Coze** — Dify should publish a TCO comparison versus Coze ...
+- **FastGPT** — Dify should highlight SOC2 Type II coverage ...
+
+## Citations
+_(citations populated by Phase 6 check_citations node)_
+```
+
+## 3. Battlecard 样例（`data/reports/battlecard_Coze_<run_id>.md`）
+
+```markdown
+# Battlecard: Coze
+_vs Dify  |  2026-06-23  |  5 signals_
+
+## Positioning
+_Why Coze wins:_
+- ByteDance open-sourced the coze repository under Apache 2.0, accepting community contributions.
+- Coze is investing heavily in workflow automation, matching where enterprise buyers want to consolidate tooling.
+
+## Key Strengths
+- ByteDance open-sourced the coze repository under Apache 2.0 ...
+- Coze is investing heavily in workflow automation ...
+- Coze moved to a per-seat model that resembles the classic SaaS playbook ...
+
+## Recent Moves
+- Coze is hiring a VP of Engineering for its agent platform ...
+- Coze moved to a per-seat model that resembles the classic SaaS playbook ...
+- ByteDance open-sourced the coze repository under Apache 2.0 ...
+- Coze launched native CRM connectors (Salesforce / HubSpot / Zoho) ...
+- Coze is investing heavily in workflow automation ...
+
+## Risks & Weaknesses
+- Coze is hiring a VP of Engineering for its agent platform ...
+- Coze launched native CRM connectors ...
+
+## Suggested Sales Response
+- Watch the new VP''s first 90 days of public appearances ...
+- Dify should publish a TCO comparison versus Coze for a 50-seat team ...
+- Audit the open-source release for enterprise-incompatible licensing terms ...
+
+## Attack Points
+_(no LLM-generated attack points; enable an LLM provider for richer cards)_
+
+## Evidence Sources
+_(citations populated by Phase 6)_
+```
+
+> **开启 LLM 后**（配 `OPENAI_API_KEY` 跑 `python -m signalpulse run`），"Attack Points" 一节会变成：
+>
+> ```markdown
+> ## Attack Points
+> **TL;DR:** Coze is closing the gap on enterprise features but trails Dify on transparency.
+> **Elevator pitch:** We''re the open, auditable alternative when enterprise buyers push back on black-box vendors.
+>
+> - Coze''s VP-of-Eng hire signals an inflection; Dify should anticipate aggressive roadmap _(confidence: 75%)_ — Recent hire announcement
+> - Per-seat pricing undercuts Dify''s usage model; Dify should arm sales with a TCO calculator _(confidence: 80%)_ — Pricing change observed
+> - The Apache 2.0 release may have hidden restrictions; Dify should publish a license comparison _(confidence: 60%)_ — Open-source release notes
+>
+> **Talk tracks:**
+> - _When:_ Prospect asks about pricing predictability → _Say:_ "Coze''s per-seat model sounds predictable but in our experience enterprise teams hit expansion costs 3x the per-seat quote by month 9..."
+> ```
+
+## 4. Eval 指标（`data/evals/eval_<run_id>.json`）
+
+```json
+{
+  "run_id": "b54871d7a44f",
+  "citation_coverage": 0.47,
+  "unsupported_claim_rate": 0.53,
+  "total_claims": 77,
+  "supported_claims": 36,
+  "total_normalized_docs": 9,
+  "unique_content_hashes": 9,
+  "node_latency_ms": {
+    "generate_weekly_report_node": 11.8,
+    "generate_battlecards_node": 11.4,
+    "check_citations_node": 768.3,
+    "run_evals_node": 11.8
+  },
+  "generated_at": "2026-06-23T16:48:03Z"
+}
+```
+
+## 5. Trace 文件（`data/traces/<run_id>.json`）
+
+```json
+{
+  "run_id": "b54871d7a44f",
+  "started_at": "2026-06-23T16:48:02Z",
+  "finished_at": "2026-06-23T16:48:03Z",
+  "status": "completed",
+  "spans": [
+    {
+      "node": "load_sample_node",
+      "entered_at": "...",
+      "exited_at": "...",
+      "duration_ms": 12.4,
+      "status": "ok"
+    },
+    {
+      "node": "generate_weekly_report_node",
+      "duration_ms": 11.8,
+      "status": "ok"
+    },
+    ...
+  ]
+}
+```
+
+## 6. Streamlit UI 截图（文字版）
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  ⚙️ SignalPulse                       ┌──────────────────────────┐  │
+│  AI Competitive Intelligence           │   SignalPulse     │  │
+│                                        │   ──────────────         │  │
+│  Run                                    │                          │  │
+│  Competitor config: [ai-agent.yaml ▼]   │  AI Competitive          │  │
+│  ☑ Use sample dataset                   │  Intelligence - weekly   │  │
+│  [🚀 Run pipeline]                      │  reports, sales cards.   │  │
+│                                        │                          │  │
+│  v0.1.0                                │  [Weekly][Battle][Eval]  │  │
+│                                        │                          │  │
+│                                        │  📑 Reports (weekly)     │  │
+│                                        │  ┌─────────────────────┐ │  │
+│                                        │  │ Weekly 2026-06-23   │ │  │
+│                                        │  └─────────────────────┘ │  │
+└────────────────────────────────────────┴──────────────────────────┘
+```
+
+## 7. FastAPI 文档
+
+启动 `uvicorn marketsignal.api.app:create_app --factory` 后访问 http://localhost:8000/docs：
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/health` | GET | liveness probe |
+| `/ready` | GET | readiness (DB + vector store) |
+| `/runs` | GET | 列出最近 crawl runs |
+| `/runs` | POST | 启动新 run（background） |
+| `/runs/{id}` | GET | 单个 run 详情 + metrics |
+| `/reports` | GET | 列出报告（可按 type 过滤） |
+| `/reports/{id}` | GET | 报告详情 + markdown 内容 |
+| `/reports/{id}/markdown` | GET | 纯 markdown 响应 |
+| `/reports/{id}/download` | GET | 文件下载 |
+
+---
+
+**现场复现步骤**：
+```bash
+# 1. 跑 sample pipeline
+python -m signalpulse run --use-sample-dataset
+
+# 2. 启动 API
+uvicorn marketsignal.api.app:create_app --factory
+
+# 3. 启动 UI
+streamlit run src/marketsignal/ui/app.py
+```

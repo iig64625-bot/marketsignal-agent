@@ -1,1 +1,78 @@
-"""Shared FastAPI dependencies for the SignalPulse Agent API.  Each dependency is a generator-style call that the FastAPI ``Depends`` system will open, yield, and close automatically. Keeping these here means route modules stay free of plumbing and stay testable in isolation. """ from __future__ import annotations  from collections.abc import Iterator from typing import TYPE_CHECKING, Any  from fastapi import Depends, HTTPException, status from sqlalchemy.orm import Session  from signalpulse.db.session import get_session  if TYPE_CHECKING:     pass   def get_db(  # noqa: B008 ) -> Iterator[Session]:     """Yield a SQLAlchemy :class:`Session` and ensure it is closed.      Re-raises as :class:`HTTPException` (500) so unhandled DB errors do not     leak stack traces to API consumers.     """     try:         with get_session() as session:             yield session     except HTTPException:         # Let HTTPExceptions (404/422/etc.) propagate unchanged so FastAPI can         # turn them into the intended status code rather than swallowing them         # as a generic 500.         raise     except Exception as exc:  # noqa: BLE001         raise HTTPException(             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,             detail=f"database error: {exc}",         ) from exc   def get_pipeline(  # noqa: B008 ) -> Any:  # noqa: B008     """Build (or return a cached) compiled LangGraph pipeline.      Each request gets a fresh pipeline because LangGraph state is per-run and     caching the compiled object across requests would mix run states. If you     need real concurrency, swap this for a :class:`asyncio.Lock` around a     shared builder.     """     try:         from signalpulse.agents.graph import build_pipeline          return build_pipeline()     except Exception as exc:  # noqa: BLE001         raise HTTPException(             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,             detail=f"pipeline unavailable: {exc}",         ) from exc   def get_vector_store(  # noqa: B008 ) -> Any:  # noqa: B008     """Yield a :class:`VectorStore` instance or raise 503 if Chroma is missing."""     try:         from signalpulse.rag.vector_store import VectorStore          return VectorStore()     except Exception as exc:  # noqa: BLE001         raise HTTPException(             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,             detail=f"vector store unavailable: {exc}",         ) from exc   __all__ = ["get_db", "get_pipeline", "get_vector_store", "Depends"]
+"""Shared FastAPI dependencies for the SignalPulse Agent API.
+
+Each dependency is a generator-style call that the FastAPI ``Depends`` system
+will open, yield, and close automatically. Keeping these here means route
+modules stay free of plumbing and stay testable in isolation.
+"""
+from __future__ import annotations
+
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
+
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from signalpulse.db.session import get_session
+
+if TYPE_CHECKING:
+    pass
+
+
+def get_db(  # noqa: B008
+) -> Iterator[Session]:
+    """Yield a SQLAlchemy :class:`Session` and ensure it is closed.
+
+    Re-raises as :class:`HTTPException` (500) so unhandled DB errors do not
+    leak stack traces to API consumers.
+    """
+    try:
+        with get_session() as session:
+            yield session
+    except HTTPException:
+        # Let HTTPExceptions (404/422/etc.) propagate unchanged so FastAPI can
+        # turn them into the intended status code rather than swallowing them
+        # as a generic 500.
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"database error: {exc}",
+        ) from exc
+
+
+def get_pipeline(  # noqa: B008
+) -> Any:  # noqa: B008
+    """Build (or return a cached) compiled LangGraph pipeline.
+
+    Each request gets a fresh pipeline because LangGraph state is per-run and
+    caching the compiled object across requests would mix run states. If you
+    need real concurrency, swap this for a :class:`asyncio.Lock` around a
+    shared builder.
+    """
+    try:
+        from signalpulse.agents.graph import build_pipeline
+
+        return build_pipeline()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"pipeline unavailable: {exc}",
+        ) from exc
+
+
+def get_vector_store(  # noqa: B008
+) -> Any:  # noqa: B008
+    """Yield a :class:`VectorStore` instance or raise 503 if Chroma is missing."""
+    try:
+        from signalpulse.rag.vector_store import VectorStore
+
+        return VectorStore()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"vector store unavailable: {exc}",
+        ) from exc
+
+
+__all__ = ["get_db", "get_pipeline", "get_vector_store", "Depends"]
+

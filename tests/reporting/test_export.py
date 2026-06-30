@@ -1,1 +1,129 @@
-"""Tests for signalpulse.reporting.export (PDF + Excel).""" from __future__ import annotations  from pathlib import Path from unittest.mock import MagicMock  import pytest  from signalpulse.reporting.export import _read_body, _strip_md  # Optional deps: skip if not installed (project's [pdf] extra is optional) fpdf2 = pytest.importorskip("fpdf", reason="fpdf2 not installed; pip install fpdf2") openpyxl = pytest.importorskip("openpyxl", reason="openpyxl not installed; pip install openpyxl")  from signalpulse.reporting.export import export_to_excel, export_to_pdf   # ---- _strip_md (real behavior: only handles **bold**, *italic*, `code`) ----  def test_strip_md_bold():     """**bold** becomes plain text."""     assert _strip_md("**hello**") == "hello"   def test_strip_md_italic():     """*italic* becomes plain text (single asterisks)."""     assert _strip_md("*hello*") == "hello"   def test_strip_md_inline_code():     """`code` becomes plain text."""     assert _strip_md("use `foo` here") == "use foo here"   def test_strip_md_passthrough_link():     """Links are NOT stripped (current implementation doesn't handle markdown links)."""     # Documenting actual behavior: link syntax is left as-is.     assert _strip_md("[click](https://example.com)") == "[click](https://example.com)"   def test_strip_md_passthrough_heading():     """Headings are NOT stripped."""     assert _strip_md("# Title") == "# Title"   def test_strip_md_empty():     """Empty string returns empty string."""     assert _strip_md("") == ""   # ---- _read_body ----  def test_read_body_no_paths():     """Report with no markdown_path / json_path returns empty string."""     r = MagicMock()     r.markdown_path = None     r.json_path = None     assert _read_body(r) == ""   def test_read_body_markdown_path(tmp_data_dir):     """Read content from markdown_path when present."""     p = Path(tmp_data_dir) / "report.md"     p.write_text("# Sample\n\nSome body", encoding="utf-8")     r = MagicMock()     r.markdown_path = str(p)     r.json_path = None     body = _read_body(r)     assert "Sample" in body     assert "Some body" in body   # ---- export_to_pdf ----  def test_export_to_pdf_creates_file(tmp_data_dir):     """export_to_pdf writes a non-empty file to output_path."""     p = Path(tmp_data_dir) / "report.md"     p.write_text("# Title\n\nA paragraph.", encoding="utf-8")     r = MagicMock()     r.title = "Test"     r.markdown_path = str(p)     r.json_path = None     out = Path(tmp_data_dir) / "out.pdf"     result = export_to_pdf(r, out)     assert result == out     assert out.exists()     assert out.stat().st_size > 0   def test_export_to_pdf_empty_report(tmp_data_dir):     """Empty report still produces a (small) valid PDF."""     r = MagicMock()     r.title = "Empty"     r.markdown_path = None     r.json_path = None     out = Path(tmp_data_dir) / "empty.pdf"     export_to_pdf(r, out)     assert out.exists()     assert out.stat().st_size > 0   # ---- export_to_excel ----  def test_export_to_excel_creates_file(tmp_data_dir):     """export_to_excel writes a non-empty xlsx file."""     p = Path(tmp_data_dir) / "report.md"     p.write_text("# Excel test\n\nbody", encoding="utf-8")     r = MagicMock()     r.title = "Excel Test"     r.markdown_path = str(p)     r.json_path = None     out = Path(tmp_data_dir) / "out.xlsx"     result = export_to_excel(r, out)     assert result == out     assert out.exists()     assert out.stat().st_size > 0   def test_export_to_excel_with_run_id(tmp_data_dir):     """run_id kwarg is accepted."""     p = Path(tmp_data_dir) / "report.md"     p.write_text("# Hi", encoding="utf-8")     r = MagicMock()     r.title = "T"     r.markdown_path = str(p)     r.json_path = None     out = Path(tmp_data_dir) / "out2.xlsx"     export_to_excel(r, out, run_id="abc123")     assert out.exists()
+"""Tests for signalpulse.reporting.export (PDF + Excel)."""
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
+from signalpulse.reporting.export import _read_body, _strip_md
+
+# Optional deps: skip if not installed (project's [pdf] extra is optional)
+fpdf2 = pytest.importorskip("fpdf", reason="fpdf2 not installed; pip install fpdf2")
+openpyxl = pytest.importorskip("openpyxl", reason="openpyxl not installed; pip install openpyxl")
+
+from signalpulse.reporting.export import export_to_excel, export_to_pdf
+
+
+# ---- _strip_md (real behavior: only handles **bold**, *italic*, `code`) ----
+
+def test_strip_md_bold():
+    """**bold** becomes plain text."""
+    assert _strip_md("**hello**") == "hello"
+
+
+def test_strip_md_italic():
+    """*italic* becomes plain text (single asterisks)."""
+    assert _strip_md("*hello*") == "hello"
+
+
+def test_strip_md_inline_code():
+    """`code` becomes plain text."""
+    assert _strip_md("use `foo` here") == "use foo here"
+
+
+def test_strip_md_passthrough_link():
+    """Links are NOT stripped (current implementation doesn't handle markdown links)."""
+    # Documenting actual behavior: link syntax is left as-is.
+    assert _strip_md("[click](https://example.com)") == "[click](https://example.com)"
+
+
+def test_strip_md_passthrough_heading():
+    """Headings are NOT stripped."""
+    assert _strip_md("# Title") == "# Title"
+
+
+def test_strip_md_empty():
+    """Empty string returns empty string."""
+    assert _strip_md("") == ""
+
+
+# ---- _read_body ----
+
+def test_read_body_no_paths():
+    """Report with no markdown_path / json_path returns empty string."""
+    r = MagicMock()
+    r.markdown_path = None
+    r.json_path = None
+    assert _read_body(r) == ""
+
+
+def test_read_body_markdown_path(tmp_data_dir):
+    """Read content from markdown_path when present."""
+    p = Path(tmp_data_dir) / "report.md"
+    p.write_text("# Sample\n\nSome body", encoding="utf-8")
+    r = MagicMock()
+    r.markdown_path = str(p)
+    r.json_path = None
+    body = _read_body(r)
+    assert "Sample" in body
+    assert "Some body" in body
+
+
+# ---- export_to_pdf ----
+
+def test_export_to_pdf_creates_file(tmp_data_dir):
+    """export_to_pdf writes a non-empty file to output_path."""
+    p = Path(tmp_data_dir) / "report.md"
+    p.write_text("# Title\n\nA paragraph.", encoding="utf-8")
+    r = MagicMock()
+    r.title = "Test"
+    r.markdown_path = str(p)
+    r.json_path = None
+    out = Path(tmp_data_dir) / "out.pdf"
+    result = export_to_pdf(r, out)
+    assert result == out
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_export_to_pdf_empty_report(tmp_data_dir):
+    """Empty report still produces a (small) valid PDF."""
+    r = MagicMock()
+    r.title = "Empty"
+    r.markdown_path = None
+    r.json_path = None
+    out = Path(tmp_data_dir) / "empty.pdf"
+    export_to_pdf(r, out)
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+# ---- export_to_excel ----
+
+def test_export_to_excel_creates_file(tmp_data_dir):
+    """export_to_excel writes a non-empty xlsx file."""
+    p = Path(tmp_data_dir) / "report.md"
+    p.write_text("# Excel test\n\nbody", encoding="utf-8")
+    r = MagicMock()
+    r.title = "Excel Test"
+    r.markdown_path = str(p)
+    r.json_path = None
+    out = Path(tmp_data_dir) / "out.xlsx"
+    result = export_to_excel(r, out)
+    assert result == out
+    assert out.exists()
+    assert out.stat().st_size > 0
+
+
+def test_export_to_excel_with_run_id(tmp_data_dir):
+    """run_id kwarg is accepted."""
+    p = Path(tmp_data_dir) / "report.md"
+    p.write_text("# Hi", encoding="utf-8")
+    r = MagicMock()
+    r.title = "T"
+    r.markdown_path = str(p)
+    r.json_path = None
+    out = Path(tmp_data_dir) / "out2.xlsx"
+    export_to_excel(r, out, run_id="abc123")
+    assert out.exists()

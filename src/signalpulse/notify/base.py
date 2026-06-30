@@ -1,1 +1,29 @@
-"""Base classes for notifications.""" from __future__ import annotations  from abc import ABC, abstractmethod from dataclasses import dataclass, field   @dataclass class NotifyMessage:     subject: str     body: str     status: str     target: str     run_id: str = ""     cost_summary: str = ""     report_files: list = field(default_factory=list)   class Notification(ABC):     @abstractmethod     def send(self, msg: NotifyMessage) -> bool:         """Send the notification. Return True on success."""      @abstractmethod     def name(self) -> str:         """Return the notifier name (e.g. 'feishu', 'email')."""   __all__ = ["Notification", "NotifyMessage"]
+﻿"""Base classes for notifications."""
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+
+@dataclass
+class NotifyMessage:
+    subject: str
+    body: str
+    status: str
+    target: str
+    run_id: str = ""
+    cost_summary: str = ""
+    report_files: list = field(default_factory=list)
+
+
+class Notification(ABC):
+    @abstractmethod
+    def send(self, msg: NotifyMessage) -> bool:
+        """Send the notification. Return True on success."""
+
+    @abstractmethod
+    def name(self) -> str:
+        """Return the notifier name (e.g. 'feishu', 'email')."""
+
+
+__all__ = ["Notification", "NotifyMessage"]

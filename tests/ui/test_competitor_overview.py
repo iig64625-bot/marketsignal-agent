@@ -1,1 +1,49 @@
-"""Tests for signalpulse.ui.components.competitor_overview.""" from __future__ import annotations  from signalpulse.ui.components.competitor_overview import _companies_with_stats   def test_companies_with_stats_empty_db():     """No companies in DB -> empty list."""     out = _companies_with_stats()     assert isinstance(out, list)     assert out == []   def test_companies_with_stats_one_company_no_signals():     """A company with no signals still appears with week_signals=0."""     from signalpulse.db.session import get_session     from signalpulse.models import Company     with get_session() as s:         s.add(Company(name="TestCo_A", website="https://test.example.com"))         s.commit()     out = _companies_with_stats()     assert len(out) == 1     assert out[0]["name"] == "TestCo_A"     assert out[0]["week_signals"] == 0     assert out[0]["latest_finding"] is None     assert out[0]["type_mix"] == []   def test_companies_with_stats_ordered_by_name():     """Companies are returned in alphabetical order."""     from signalpulse.db.session import get_session     from signalpulse.models import Company     with get_session() as s:         s.add(Company(name="ZetaSort", website=""))         s.add(Company(name="AlphaSort", website=""))         s.add(Company(name="MuSort", website=""))         s.commit()     out = _companies_with_stats()     names = [c["name"] for c in out]     assert names == ["AlphaSort", "MuSort", "ZetaSort"]   def test_no_t_variable_collision_in_source():     """Regression: ``t`` loop var must NOT shadow i18n.t() in the source file."""     from pathlib import Path     src = Path("src/signalpulse/ui/components/competitor_overview.py").read_text(encoding="utf-8")     # The list comprehension must use a non-shadowing var name     assert "[(t or " not in src, "BUG: t variable still shadows i18n.t()"     assert "sig_type" in src, "Expected sig_type in list comprehension"
+"""Tests for signalpulse.ui.components.competitor_overview."""
+from __future__ import annotations
+
+from signalpulse.ui.components.competitor_overview import _companies_with_stats
+
+
+def test_companies_with_stats_empty_db():
+    """No companies in DB -> empty list."""
+    out = _companies_with_stats()
+    assert isinstance(out, list)
+    assert out == []
+
+
+def test_companies_with_stats_one_company_no_signals():
+    """A company with no signals still appears with week_signals=0."""
+    from signalpulse.db.session import get_session
+    from signalpulse.models import Company
+    with get_session() as s:
+        s.add(Company(name="TestCo_A", website="https://test.example.com"))
+        s.commit()
+    out = _companies_with_stats()
+    assert len(out) == 1
+    assert out[0]["name"] == "TestCo_A"
+    assert out[0]["week_signals"] == 0
+    assert out[0]["latest_finding"] is None
+    assert out[0]["type_mix"] == []
+
+
+def test_companies_with_stats_ordered_by_name():
+    """Companies are returned in alphabetical order."""
+    from signalpulse.db.session import get_session
+    from signalpulse.models import Company
+    with get_session() as s:
+        s.add(Company(name="ZetaSort", website=""))
+        s.add(Company(name="AlphaSort", website=""))
+        s.add(Company(name="MuSort", website=""))
+        s.commit()
+    out = _companies_with_stats()
+    names = [c["name"] for c in out]
+    assert names == ["AlphaSort", "MuSort", "ZetaSort"]
+
+
+def test_no_t_variable_collision_in_source():
+    """Regression: ``t`` loop var must NOT shadow i18n.t() in the source file."""
+    from pathlib import Path
+    src = Path("src/signalpulse/ui/components/competitor_overview.py").read_text(encoding="utf-8")
+    # The list comprehension must use a non-shadowing var name
+    assert "[(t or " not in src, "BUG: t variable still shadows i18n.t()"
+    assert "sig_type" in src, "Expected sig_type in list comprehension"

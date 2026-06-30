@@ -1,1 +1,14 @@
-[theme] base = "dark" primaryColor = "#6366f1" backgroundColor = "#0e1117" secondaryBackgroundColor = "#1a1d23" textColor = "#fafafa" font = "sans serif"  [browser] gatherUsageStats = false  [server] maxUploadSize = 50 headless = true
+[theme]
+base = "dark"
+primaryColor = "#6366f1"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#1a1d23"
+textColor = "#fafafa"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+maxUploadSize = 50
+headless = true

@@ -1,1 +1,91 @@
-"""LLM-driven battlecard enrichment (sales pitch + attack points + talk tracks, in Chinese).""" from __future__ import annotations  from typing import Any  from loguru import logger  from signalpulse.models.signal import Signal from signalpulse.utils.llm import get_llm  _BATTLE_PROMPT = """你是一位资深竞争销售策略师。根据下面提供的竞品市场信号，生成一份**中文**销售竞争卡片，包含： - sales_pitch：1-2 句话的电梯演讲，供销售团队直接使用。 - attack_points：3-5 个具体可利用的弱点，每条配一句证据引用。 - talk_tracks：3-5 句具体话术，对应常见客户场景。 - summary：一句话 TL;DR 总结。  要求：具体、可执行、紧扣提供的信号。如果信号是推断性内容（analysis/recommendation），标注可信度较低。不要编造信号中没有的事实。 **所有输出必须使用中文。**"""   def _build_prompt(target_company: str, competitor: str, signals: list[Signal]) -> str:     lines = [         f"我方（TARGET）：{target_company}",         f"竞品（COMPETITOR）：{competitor}",         "信号（SIGNALS）：",     ]     for s in signals:         lines.append(f"- 类型={s.signal_type} 可信度={s.confidence} 发现={s.finding}")         if s.analysis:             lines.append(f"  分析：{s.analysis}")         if s.recommendation:             lines.append(f"  建议：{s.recommendation}")     lines.append("请按 BattlecardExtras 字段返回 JSON。")     return "\n".join(lines)   async def generate_battlecard_extras(     target_company: str,     competitor: str,     signals: list[Signal],     *,     run_id: str | None = None,     node: str = "generate_battlecard_extras", ) -> dict[str, Any]:     """Call the LLM for sales_pitch + attack_points + talk_tracks (Chinese).      Falls back to a deterministic, signal-derived result if no LLM is configured     or the call fails.     """     fallback: dict[str, Any] = {         "sales_pitch": "",         "attack_points": [],         "talk_tracks": [],         "summary": "",         "fallback": True,     }     if not signals:         return fallback     try:         llm = get_llm()     except ValueError as exc:         logger.info("battlecard_extras: LLM unavailable, using fallback: {}", exc)         return fallback     from signalpulse.models.schemas import BattlecardExtras  # local to avoid cycles      structured = llm.with_structured_output(BattlecardExtras)     try:         from signalpulse.observability.llm_tracking import invoke_with_metrics          result: BattlecardExtras = await invoke_with_metrics(             run_id=run_id,             node=node,             llm=structured,             messages=[                 {"role": "system", "content": _BATTLE_PROMPT},                 {"role": "user", "content": _build_prompt(target_company, competitor, signals)},             ],         )         return {             "sales_pitch": result.sales_pitch,             "attack_points": [ap.model_dump() for ap in result.attack_points],             "talk_tracks": [t.model_dump() for t in result.talk_tracks],             "summary": result.summary,             "fallback": False,         }     except Exception as exc:  # noqa: BLE001         logger.warning("battlecard_extras: LLM call failed, using fallback: {}", exc)         return fallback   __all__ = ["generate_battlecard_extras"]
+"""LLM-driven battlecard enrichment (sales pitch + attack points + talk tracks, in Chinese)."""
+from __future__ import annotations
+
+from typing import Any
+
+from loguru import logger
+
+from signalpulse.models.signal import Signal
+from signalpulse.utils.llm import get_llm
+
+_BATTLE_PROMPT = """你是一位资深竞争销售策略师。根据下面提供的竞品市场信号，生成一份**中文**销售竞争卡片，包含：
+- sales_pitch：1-2 句话的电梯演讲，供销售团队直接使用。
+- attack_points：3-5 个具体可利用的弱点，每条配一句证据引用。
+- talk_tracks：3-5 句具体话术，对应常见客户场景。
+- summary：一句话 TL;DR 总结。
+
+要求：具体、可执行、紧扣提供的信号。如果信号是推断性内容（analysis/recommendation），标注可信度较低。不要编造信号中没有的事实。
+**所有输出必须使用中文。**"""
+
+
+def _build_prompt(target_company: str, competitor: str, signals: list[Signal]) -> str:
+    lines = [
+        f"我方（TARGET）：{target_company}",
+        f"竞品（COMPETITOR）：{competitor}",
+        "信号（SIGNALS）：",
+    ]
+    for s in signals:
+        lines.append(f"- 类型={s.signal_type} 可信度={s.confidence} 发现={s.finding}")
+        if s.analysis:
+            lines.append(f"  分析：{s.analysis}")
+        if s.recommendation:
+            lines.append(f"  建议：{s.recommendation}")
+    lines.append("请按 BattlecardExtras 字段返回 JSON。")
+    return "\n".join(lines)
+
+
+async def generate_battlecard_extras(
+    target_company: str,
+    competitor: str,
+    signals: list[Signal],
+    *,
+    run_id: str | None = None,
+    node: str = "generate_battlecard_extras",
+) -> dict[str, Any]:
+    """Call the LLM for sales_pitch + attack_points + talk_tracks (Chinese).
+
+    Falls back to a deterministic, signal-derived result if no LLM is configured
+    or the call fails.
+    """
+    fallback: dict[str, Any] = {
+        "sales_pitch": "",
+        "attack_points": [],
+        "talk_tracks": [],
+        "summary": "",
+        "fallback": True,
+    }
+    if not signals:
+        return fallback
+    try:
+        llm = get_llm()
+    except ValueError as exc:
+        logger.info("battlecard_extras: LLM unavailable, using fallback: {}", exc)
+        return fallback
+    from signalpulse.models.schemas import BattlecardExtras  # local to avoid cycles
+
+    structured = llm.with_structured_output(BattlecardExtras)
+    try:
+        from signalpulse.observability.llm_tracking import invoke_with_metrics
+
+        result: BattlecardExtras = await invoke_with_metrics(
+            run_id=run_id,
+            node=node,
+            llm=structured,
+            messages=[
+                {"role": "system", "content": _BATTLE_PROMPT},
+                {"role": "user", "content": _build_prompt(target_company, competitor, signals)},
+            ],
+        )
+        return {
+            "sales_pitch": result.sales_pitch,
+            "attack_points": [ap.model_dump() for ap in result.attack_points],
+            "talk_tracks": [t.model_dump() for t in result.talk_tracks],
+            "summary": result.summary,
+            "fallback": False,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("battlecard_extras: LLM call failed, using fallback: {}", exc)
+        return fallback
+
+
+__all__ = ["generate_battlecard_extras"]

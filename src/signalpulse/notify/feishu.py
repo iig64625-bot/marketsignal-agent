@@ -1,1 +1,99 @@
-"""Feishu (Lark) webhook notifier with optional HMAC-SHA256 signature.""" from __future__ import annotations  import base64 import hashlib import hmac import json import time import urllib.error import urllib.request  from loguru import logger  from signalpulse.notify.base import Notification, NotifyMessage   class FeishuWebhook(Notification):     """Send a rich interactive card to a Feishu bot webhook.      If ``secret`` is provided, the request includes a HMAC-SHA256 signature     and timestamp so Feishu can verify the source.     """      def __init__(self, webhook_url: str, secret: str = ""):         self.webhook_url = webhook_url         self.secret = secret      def name(self) -> str:         return "feishu"      @staticmethod     def _sign(secret: str, timestamp: str) -> str:         """Feishu custom-bot signature: HMAC-SHA256, then base64."""         string_to_sign = f"{timestamp}\n{secret}"         hmac_code = hmac.new(             string_to_sign.encode("utf-8"),             digestmod=hashlib.sha256,         ).digest()         return base64.b64encode(hmac_code).decode("utf-8")      def send(self, msg: NotifyMessage) -> bool:         timestamp = str(int(time.time()))         color = "green" if msg.status == "completed" else "red" if msg.status == "failed" else "orange"         icon = "OK" if msg.status == "completed" else "FAIL" if msg.status == "failed" else "WARN"         title = f"{icon} SignalPulse - {msg.target} - {msg.status.upper()}"         elements = [             {                 "tag": "div",                 "fields": [                     {"is_short": True, "text": {"tag": "lark_md", "content": f"**Run ID**\n`{msg.run_id[:12]}`"}},                     {"is_short": True, "text": {"tag": "lark_md", "content": f"**Cost**\n{msg.cost_summary or '-'}"}},                 ],             },             {"tag": "hr"},             {"tag": "markdown", "content": msg.body[:3500]},         ]         if msg.report_files:             file_lines = "\n".join(f"- {f}" for f in msg.report_files[:5])             elements.append({"tag": "markdown", "content": f"**Reports**\n{file_lines}"})         payload: dict = {             "msg_type": "interactive",             "card": {                 "header": {"title": {"tag": "plain_text", "content": title}, "template": color},                 "elements": elements,             },         }         if self.secret:             payload["timestamp"] = timestamp             payload["sign"] = self._sign(self.secret, timestamp)         try:             data = json.dumps(payload).encode("utf-8")             req = urllib.request.Request(                 self.webhook_url,                 data=data,                 headers={"Content-Type": "application/json; charset=utf-8"},             )             with urllib.request.urlopen(req, timeout=15) as resp:                 body = resp.read().decode("utf-8", errors="replace")                 if resp.status == 200:                     try:                         parsed = json.loads(body)                         code = parsed.get("code", -1)                         if code != 0:                             logger.error("feishu webhook rejected: code={} msg={}", code, parsed.get("msg"))                             return False                     except json.JSONDecodeError:                         pass                     return True                 logger.warning("feishu webhook returned status {} body={}", resp.status, body[:200])                 return False         except urllib.error.URLError as exc:             logger.error("feishu webhook failed: {}", exc)             return False         except Exception as exc:  # noqa: BLE001             logger.error("feishu webhook error: {}", exc)             return False   __all__ = ["FeishuWebhook"]
+﻿"""Feishu (Lark) webhook notifier with optional HMAC-SHA256 signature."""
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import json
+import time
+import urllib.error
+import urllib.request
+
+from loguru import logger
+
+from signalpulse.notify.base import Notification, NotifyMessage
+
+
+class FeishuWebhook(Notification):
+    """Send a rich interactive card to a Feishu bot webhook.
+
+    If ``secret`` is provided, the request includes a HMAC-SHA256 signature
+    and timestamp so Feishu can verify the source.
+    """
+
+    def __init__(self, webhook_url: str, secret: str = ""):
+        self.webhook_url = webhook_url
+        self.secret = secret
+
+    def name(self) -> str:
+        return "feishu"
+
+    @staticmethod
+    def _sign(secret: str, timestamp: str) -> str:
+        """Feishu custom-bot signature: HMAC-SHA256, then base64."""
+        string_to_sign = f"{timestamp}\n{secret}"
+        hmac_code = hmac.new(
+            string_to_sign.encode("utf-8"),
+            digestmod=hashlib.sha256,
+        ).digest()
+        return base64.b64encode(hmac_code).decode("utf-8")
+
+    def send(self, msg: NotifyMessage) -> bool:
+        timestamp = str(int(time.time()))
+        color = "green" if msg.status == "completed" else "red" if msg.status == "failed" else "orange"
+        icon = "OK" if msg.status == "completed" else "FAIL" if msg.status == "failed" else "WARN"
+        title = f"{icon} SignalPulse - {msg.target} - {msg.status.upper()}"
+        elements = [
+            {
+                "tag": "div",
+                "fields": [
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**Run ID**\n`{msg.run_id[:12]}`"}},
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**Cost**\n{msg.cost_summary or '-'}"}},
+                ],
+            },
+            {"tag": "hr"},
+            {"tag": "markdown", "content": msg.body[:3500]},
+        ]
+        if msg.report_files:
+            file_lines = "\n".join(f"- {f}" for f in msg.report_files[:5])
+            elements.append({"tag": "markdown", "content": f"**Reports**\n{file_lines}"})
+        payload: dict = {
+            "msg_type": "interactive",
+            "card": {
+                "header": {"title": {"tag": "plain_text", "content": title}, "template": color},
+                "elements": elements,
+            },
+        }
+        if self.secret:
+            payload["timestamp"] = timestamp
+            payload["sign"] = self._sign(self.secret, timestamp)
+        try:
+            data = json.dumps(payload).encode("utf-8")
+            req = urllib.request.Request(
+                self.webhook_url,
+                data=data,
+                headers={"Content-Type": "application/json; charset=utf-8"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                if resp.status == 200:
+                    try:
+                        parsed = json.loads(body)
+                        code = parsed.get("code", -1)
+                        if code != 0:
+                            logger.error("feishu webhook rejected: code={} msg={}", code, parsed.get("msg"))
+                            return False
+                    except json.JSONDecodeError:
+                        pass
+                    return True
+                logger.warning("feishu webhook returned status {} body={}", resp.status, body[:200])
+                return False
+        except urllib.error.URLError as exc:
+            logger.error("feishu webhook failed: {}", exc)
+            return False
+        except Exception as exc:  # noqa: BLE001
+            logger.error("feishu webhook error: {}", exc)
+            return False
+
+
+__all__ = ["FeishuWebhook"]

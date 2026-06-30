@@ -1,1 +1,30 @@
-target:   name: Notion   website: https://notion.so  competitors:   - name: Obsidian     website: https://obsidian.md     sources:       - type: changelog         url: https://obsidian.md/changelog       - type: webpage         url: https://obsidian.md/pricing       - type: rss         url: https://forum.obsidian.md/c/announcements/13.rss    - name: Logseq     website: https://logseq.com     sources:       - type: github         url: https://github.com/logseq/logseq       - type: webpage         url: https://logseq.com/pricing    - name: Feishu Bitable     website: https://www.feishu.cn/product/bitable     sources:       - type: webpage         url: https://www.feishu.cn/hc/articles/360049067833       - type: webpage         url: https://www.feishu.cn/product/bitable
+﻿target:
+  name: Notion
+  website: https://notion.so
+
+competitors:
+  - name: Obsidian
+    website: https://obsidian.md
+    sources:
+      - type: changelog
+        url: https://obsidian.md/changelog
+      - type: webpage
+        url: https://obsidian.md/pricing
+      - type: rss
+        url: https://forum.obsidian.md/c/announcements/13.rss
+
+  - name: Logseq
+    website: https://logseq.com
+    sources:
+      - type: github
+        url: https://github.com/logseq/logseq
+      - type: webpage
+        url: https://logseq.com/pricing
+
+  - name: Feishu Bitable
+    website: https://www.feishu.cn/product/bitable
+    sources:
+      - type: webpage
+        url: https://www.feishu.cn/hc/articles/360049067833
+      - type: webpage
+        url: https://www.feishu.cn/product/bitable

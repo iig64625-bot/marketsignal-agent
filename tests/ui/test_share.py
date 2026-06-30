@@ -1,1 +1,49 @@
-"""Tests for signalpulse.ui.components.share (HTML snapshot).""" from __future__ import annotations  from pathlib import Path from unittest.mock import MagicMock  from signalpulse.ui.components.share import _render_html   def test_render_html_returns_string():     """_render_html returns a non-empty string."""     html = _render_html("Test Report", "# Hello\n\nbody")     assert isinstance(html, str)     assert len(html) > 0   def test_render_html_contains_title():     """The <title> should reflect the report title."""     html = _render_html("My Battlecard", "body")     assert "My Battlecard" in html     assert "<title>" in html   def test_render_html_contains_body():     """The Markdown body should be present in the output."""     html = _render_html("T", "This is the body content")     assert "This is the body content" in html   def test_render_html_escapes_html_chars():     """HTML special chars in the body should be escaped, not injected."""     html = _render_html("T", "<script>alert(1)</script>")     assert "<script>" not in html     assert "&lt;script&gt;" in html   def test_render_html_has_dark_mode_css():     """The HTML should include dark-mode styling."""     html = _render_html("T", "body")     assert "#0e1117" in html or "#1e1e1e" in html   def test_render_html_self_contained():     """HTML should be a complete document with no external resource refs."""     html = _render_html("T", "body")     assert "<!DOCTYPE html>" in html     assert "<html" in html     assert "<body>" in html     assert '<script src=' not in html
+"""Tests for signalpulse.ui.components.share (HTML snapshot)."""
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from signalpulse.ui.components.share import _render_html
+
+
+def test_render_html_returns_string():
+    """_render_html returns a non-empty string."""
+    html = _render_html("Test Report", "# Hello\n\nbody")
+    assert isinstance(html, str)
+    assert len(html) > 0
+
+
+def test_render_html_contains_title():
+    """The <title> should reflect the report title."""
+    html = _render_html("My Battlecard", "body")
+    assert "My Battlecard" in html
+    assert "<title>" in html
+
+
+def test_render_html_contains_body():
+    """The Markdown body should be present in the output."""
+    html = _render_html("T", "This is the body content")
+    assert "This is the body content" in html
+
+
+def test_render_html_escapes_html_chars():
+    """HTML special chars in the body should be escaped, not injected."""
+    html = _render_html("T", "<script>alert(1)</script>")
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
+def test_render_html_has_dark_mode_css():
+    """The HTML should include dark-mode styling."""
+    html = _render_html("T", "body")
+    assert "#0e1117" in html or "#1e1e1e" in html
+
+
+def test_render_html_self_contained():
+    """HTML should be a complete document with no external resource refs."""
+    html = _render_html("T", "body")
+    assert "<!DOCTYPE html>" in html
+    assert "<html" in html
+    assert "<body>" in html
+    assert '<script src=' not in html

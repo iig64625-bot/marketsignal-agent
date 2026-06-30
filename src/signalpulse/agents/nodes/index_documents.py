@@ -1,1 +1,46 @@
-"""Node: chunk normalized documents and add them to the vector store.""" from __future__ import annotations  from typing import Any  from loguru import logger  from signalpulse.agents.state import GraphState from signalpulse.db.session import get_session from signalpulse.models.normalized_document import NormalizedDocument from signalpulse.rag.chunker import chunk_document from signalpulse.rag.vector_store import SignalPulseVectorStore from signalpulse.utils.tracing import trace_node   @trace_node("index_documents_node") async def index_documents_node(state: GraphState) -> GraphState:     norm_ids = state.get("normalized_document_ids", [])     chunks_added = 0     chunks_indexed = 0     warnings = list(state.get("warnings", []))     docs: list[NormalizedDocument] = []     with get_session() as s:         docs = s.query(NormalizedDocument).filter(NormalizedDocument.id.in_(norm_ids)).all() if norm_ids else []         for d in docs:             chunks = chunk_document(d)             for c in chunks:                 s.add(c)             chunks_added += len(chunks)         s.flush()         # Try to upsert into the vector store. Without an embedding API key this         # is a no-op and the chunks are still saved as DocumentChunk rows.         all_chunks = []         for d in docs:             all_chunks.extend(d.chunks)         if all_chunks:             try:                 store = SignalPulseVectorStore()                 chunks_indexed = store.add_chunks(all_chunks)             except Exception as exc:  # noqa: BLE001                 logger.warning("vector store unavailable, chunks saved to DB only: {}", exc)                 warnings.append(f"vector_store skipped: {exc}")     metrics: dict[str, Any] = dict(state.get("metrics", {}))     metrics["chunks_created"] = float(chunks_added)     metrics["chunks_indexed"] = float(chunks_indexed)     return {"metrics": metrics, "warnings": warnings}
+"""Node: chunk normalized documents and add them to the vector store."""
+from __future__ import annotations
+
+from typing import Any
+
+from loguru import logger
+
+from signalpulse.agents.state import GraphState
+from signalpulse.db.session import get_session
+from signalpulse.models.normalized_document import NormalizedDocument
+from signalpulse.rag.chunker import chunk_document
+from signalpulse.rag.vector_store import SignalPulseVectorStore
+from signalpulse.utils.tracing import trace_node
+
+
+@trace_node("index_documents_node")
+async def index_documents_node(state: GraphState) -> GraphState:
+    norm_ids = state.get("normalized_document_ids", [])
+    chunks_added = 0
+    chunks_indexed = 0
+    warnings = list(state.get("warnings", []))
+    docs: list[NormalizedDocument] = []
+    with get_session() as s:
+        docs = s.query(NormalizedDocument).filter(NormalizedDocument.id.in_(norm_ids)).all() if norm_ids else []
+        for d in docs:
+            chunks = chunk_document(d)
+            for c in chunks:
+                s.add(c)
+            chunks_added += len(chunks)
+        s.flush()
+        # Try to upsert into the vector store. Without an embedding API key this
+        # is a no-op and the chunks are still saved as DocumentChunk rows.
+        all_chunks = []
+        for d in docs:
+            all_chunks.extend(d.chunks)
+        if all_chunks:
+            try:
+                store = SignalPulseVectorStore()
+                chunks_indexed = store.add_chunks(all_chunks)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("vector store unavailable, chunks saved to DB only: {}", exc)
+                warnings.append(f"vector_store skipped: {exc}")
+    metrics: dict[str, Any] = dict(state.get("metrics", {}))
+    metrics["chunks_created"] = float(chunks_added)
+    metrics["chunks_indexed"] = float(chunks_indexed)
+    return {"metrics": metrics, "warnings": warnings}

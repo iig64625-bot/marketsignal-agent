@@ -1,46 +1,52 @@
-# ==========================================
-# MarketSignal Agent - Competitor Configuration
-# Target: AI Agent Platforms (Dify / Coze / FastGPT)
-# ==========================================
+﻿# SignalPulse — AI Agent 竞品配置
+# 用途: 跟踪 AI Agent / Copilot 类产品（Coze / Dify / Manus / Lindy 等）
+# 最后更新: V5
 
-target_company:
-  name: "Dify"
-  website: "https://dify.ai"
-  description: "Open-source LLM app development platform"
-
-competitors:
+companies:
   - name: "Coze"
-    website: "https://www.coze.com"
-    sources:
-      - type: changelog
-        url: "https://www.coze.com/changelog"
-      - type: website
-        url: "https://www.coze.com"
-      - type: jobs
-        url: "https://www.coze.com/careers"
-      - type: github
-        url: "https://github.com/bytedance/coze"
-
+    ticker: "coze"
+    homepage: "https://www.coze.com"
+    category: "ai-agent"
+    watch: true
+    notes: "字节跳动出品，海外版 coze.com，国内版 coze.cn"
+  - name: "Dify"
+    ticker: "dify"
+    homepage: "https://dify.ai"
+    category: "ai-agent"
+    watch: true
+    notes: "开源 LLM 应用平台，BaaS 模式"
+  - name: "Manus"
+    ticker: "manus"
+    homepage: "https://manus.im"
+    category: "ai-agent"
+    watch: true
+    notes: "通用 AI Agent，2025 年 3 月发布"
+  - name: "Lindy"
+    ticker: "lindy"
+    homepage: "https://www.lindy.ai"
+    category: "ai-agent"
+    watch: false
+    notes: "AI 助手平台，定位个人/团队自动化"
   - name: "FastGPT"
-    website: "https://fastgpt.in"
-    sources:
-      - type: website
-        url: "https://fastgpt.in"
-      - type: github
-        url: "https://github.com/labring/FastGPT"
-      - type: docs
-        url: "https://doc.tryfastgpt.ai"
+    ticker: "fastgpt"
+    homepage: "https://fastgpt.in"
+    category: "ai-agent"
+    watch: true
+    notes: "开源知识库 RAG 平台"
 
-monitoring_dimensions:
-  - product_update
-  - pricing
-  - hiring
-  - user_feedback
-  - github_release
+sources:
+  - type: "rss"
+    url: "https://www.coze.com/blog/rss.xml"
+    enabled: false
+  - type: "rss"
+    url: "https://dify.ai/blog/rss.xml"
+    enabled: false
+  - type: "web"
+    url: "https://manus.im/news"
+    enabled: true
+    selector: "article.post"
 
-run_options:
-  time_window_days: 7
-  use_sample_dataset: false
-  generate_weekly_report: true
-  generate_battlecards: true
-  run_evals: true
+schedule:
+  cron: "0 8 * * *"
+  timezone: "Asia/Shanghai"
+  enabled: false

@@ -1,1 +1,39 @@
-"""HTML -> plain-text cleaner.""" from __future__ import annotations  from bs4 import BeautifulSoup from loguru import logger from readability import Document as ReadabilityDocument from trafilatura import extract as trafilatura_extract   def _html_to_text(html: str) -> str:     soup = BeautifulSoup(html, "html.parser")     for tag in soup(["script", "style", "nav", "footer", "header"]):         tag.decompose()     return soup.get_text(separator="\n", strip=True)   def clean_html(html: str) -> str:     """Return the main article text from a raw HTML document.      Tries ``trafilatura`` first (best for article content) and falls back to     ``readability-lxml`` followed by a simple ``BeautifulSoup`` strip. Plain     text without any tags is returned as-is.     """     if not html:         return ""     if "<" not in html or ">" not in html:         return html.strip()     try:         text = trafilatura_extract(html, include_links=False, include_images=False, favor_recall=True)         if text:             return text.strip()     except Exception as exc:  # noqa: BLE001         logger.debug("trafilatura failed: {}", exc)     try:         doc = ReadabilityDocument(html)         return _html_to_text(doc.summary(html_partial=True))     except Exception as exc:  # noqa: BLE001         logger.debug("readability failed: {}", exc)     return _html_to_text(html)
+﻿"""HTML -> plain-text cleaner."""
+from __future__ import annotations
+
+from bs4 import BeautifulSoup
+from loguru import logger
+from readability import Document as ReadabilityDocument
+from trafilatura import extract as trafilatura_extract
+
+
+def _html_to_text(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header"]):
+        tag.decompose()
+    return soup.get_text(separator="\n", strip=True)
+
+
+def clean_html(html: str) -> str:
+    """Return the main article text from a raw HTML document.
+
+    Tries ``trafilatura`` first (best for article content) and falls back to
+    ``readability-lxml`` followed by a simple ``BeautifulSoup`` strip. Plain
+    text without any tags is returned as-is.
+    """
+    if not html:
+        return ""
+    if "<" not in html or ">" not in html:
+        return html.strip()
+    try:
+        text = trafilatura_extract(html, include_links=False, include_images=False, favor_recall=True)
+        if text:
+            return text.strip()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("trafilatura failed: {}", exc)
+    try:
+        doc = ReadabilityDocument(html)
+        return _html_to_text(doc.summary(html_partial=True))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("readability failed: {}", exc)
+    return _html_to_text(html)

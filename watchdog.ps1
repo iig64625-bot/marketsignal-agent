@@ -1,1 +1,24 @@
-$ErrorActionPreference = "SilentlyContinue" $ProjectRoot = "D:\SignalPulse（竞品调研）" $StartCmd = "powershell.exe" $StartArgs = @("-NoProfile","-ExecutionPolicy","Bypass","-File",(Join-Path $ProjectRoot "start_ui.ps1")) $Port = 8501 $CheckSec = 15 $LogFile = Join-Path $ProjectRoot "data\watchdog.log" $dataDir = Join-Path $ProjectRoot "data" if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null } function W($m) { $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss"); Add-Content -Path $LogFile -Value "$t $m" -Encoding UTF8 } W "watchdog: started (port=$Port, check=${CheckSec}s, pid=$PID)" while ($true) {     Start-Sleep -Seconds $CheckSec     $up = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue     if ($up) { continue }     W "watchdog: port $Port DOWN -> restarting streamlit"     try {         Start-Process -FilePath $StartCmd -ArgumentList $StartArgs -WindowStyle Hidden         Start-Sleep -Seconds 8         $up2 = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue         if ($up2) { W "watchdog: streamlit RESTARTED (PID $($up2.OwningProcess))" }         else { W "watchdog: FAIL - port $Port still down after restart" }     } catch { W "watchdog: error: $_" } }
+$ErrorActionPreference = "SilentlyContinue"
+$ProjectRoot = "D:\SignalPulse（竞品调研）"
+$StartCmd = "powershell.exe"
+$StartArgs = @("-NoProfile","-ExecutionPolicy","Bypass","-File",(Join-Path $ProjectRoot "start_ui.ps1"))
+$Port = 8501
+$CheckSec = 15
+$LogFile = Join-Path $ProjectRoot "data\watchdog.log"
+$dataDir = Join-Path $ProjectRoot "data"
+if (-not (Test-Path $dataDir)) { New-Item -ItemType Directory -Path $dataDir -Force | Out-Null }
+function W($m) { $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss"); Add-Content -Path $LogFile -Value "$t $m" -Encoding UTF8 }
+W "watchdog: started (port=$Port, check=${CheckSec}s, pid=$PID)"
+while ($true) {
+    Start-Sleep -Seconds $CheckSec
+    $up = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+    if ($up) { continue }
+    W "watchdog: port $Port DOWN -> restarting streamlit"
+    try {
+        Start-Process -FilePath $StartCmd -ArgumentList $StartArgs -WindowStyle Hidden
+        Start-Sleep -Seconds 8
+        $up2 = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+        if ($up2) { W "watchdog: streamlit RESTARTED (PID $($up2.OwningProcess))" }
+        else { W "watchdog: FAIL - port $Port still down after restart" }
+    } catch { W "watchdog: error: $_" }
+}

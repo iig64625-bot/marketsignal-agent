@@ -1,1 +1,627 @@
-# SignalPulse 产品化改进执行文档（V4）  > **生成时间**：2026-06-25 > **项目路径**：D:\SignalPulse（竞品调研） > **目标**：从"技术项目"升级为"可用的产品" > **本轮**：5 个 Task，按优先级排序  ---  ## Task 1: Dashboard 首页  ### 1.1 问题  打开 Streamlit 直接是 5 个空 tab，没有概览，用户不知道系统状态。  ### 1.2 改法  **新增文件**：`src/signalpulse/ui/components/dashboard.py`  在 `ui/app.py` 中新增第一个 tab "Dashboard"，作为默认首页。  Dashboard 包含 4 个区域：  **区域1：状态卡片（顶部4个metric）**  ```python # 从 DB 查询： # 1. 最近一次运行状态（completed/failed/pending） # 2. 本周信号总数（本周所有 run 的 signal count 之和） # 3. 追踪竞品数（companies 表 count） # 4. 平均 citation coverage（最近 5 次 eval_run 均值）  cols = st.columns(4) cols[0].metric("最近运行", status, delta=delta_str) cols[1].metric("本周信号", signal_count) cols[2].metric("追踪竞品", company_count) cols[3].metric("引用覆盖率", f"{avg_citation:.0%}") ```  **区域2：信号趋势图（折线图）**  ```python # 最近 8 次运行的信号数量趋势 import plotly.express as px  fig = px.line(df, x="run_date", y="signal_count", color="competitor",               title="信号趋势", markers=True) st.plotly_chart(fig, use_container_width=True) ```  **区域3：信号分布（饼图）**  ```python # 按 signal_type 分布：product / hiring / pricing / gtm / risk fig = px.pie(df, names="signal_type", title="信号类型分布") st.plotly_chart(fig, use_container_width=True) ```  **区域4：最近活动（时间线）**  ```python # 最近 10 条信号，按时间倒序 for signal in recent_signals:     st.markdown(f"**[{signal.signal_type}]** {signal.finding[:80]}... — _{signal.competitor}_") ```  ### 1.3 修改 `ui/app.py`  ```python # 新增 dashboard tab 作为第一个 tab from signalpulse.ui.components.dashboard import render_dashboard  tab_dashboard, tab_weekly, tab_battle, tab_compare, tab_evals, tab_runs = st.tabs(     ["📊 Dashboard", "📋 Weekly report", "⚔️ Battlecards", "🔄 Compare runs", "📈 Eval metrics", "📝 Run history"] )  with tab_dashboard:     render_dashboard() ```  ### 1.4 验证  ```bash .venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py # 首页应显示 Dashboard，有 4 个 metric 卡片 + 趋势图 + 饼图 + 活动时间线 ```  ---  ## Task 2: 中文界面 + 暗色主题  ### 2.1 问题  UI 全英文，国内用户不友好。默认白色主题，没有品牌感。  ### 2.2 改法  **第一步**：新增 `.streamlit/config.toml`（项目根目录）  ```toml [theme] primaryColor = "#6366f1"        # indigo-500，品牌色 backgroundColor = "#0e1117"      # 暗色背景 secondaryBackgroundColor = "#1a1d23" textColor = "#fafafa" font = "sans serif"  [browser] gatherUsageStats = false  [server] maxUploadSize = 50 ```  **第二步**：新增 `src/signalpulse/ui/i18n.py`（国际化模块）  ```python """Simple i18n: Chinese / English toggle.""" import streamlit as st  TRANSLATIONS = {     "zh": {         "dashboard": "📊 仪表盘",         "weekly_report": "📋 周报",         "battlecards": "⚔️ 竞品卡片",         "compare_runs": "🔄 对比分析",         "eval_metrics": "📈 评估指标",         "run_history": "📝 运行记录",         "run_pipeline": "🚀 运行管道",         "use_sample": "使用示例数据（离线，0 LLM 费用）",         "competitor_config": "竞品配置文件",         "no_reports": "暂无报告，请先运行管道生成。",         "no_runs": "暂无运行记录，请在侧边栏触发运行。",         "last_run": "最近运行",         "weekly_signals": "本周信号",         "tracked_competitors": "追踪竞品",         "citation_coverage": "引用覆盖率",         "signal_trend": "信号趋势",         "signal_distribution": "信号类型分布",         "recent_activity": "最近动态",         "pipeline_running": "管道运行中...",         "pipeline_done": "运行完成",         "pipeline_failed": "运行失败",         "download_md": "📥 下载 Markdown",         "select_report": "选择报告",         "compare": "对比运行",         "week_over_week": "周对比分析",         "pick_two_runs": "选择两次运行查看变化",         "new_claims": "新增发现",         "removed_claims": "消失的发现",         "per_competitor": "各竞品信号数",         "baseline": "基线",         "current": "当前",         "live_progress": "实时进度",         "inspect_run": "查看运行详情",         "status": "状态",         "started": "开始时间",         "warnings": "警告",     },     "en": {         "dashboard": "📊 Dashboard",         "weekly_report": "📋 Weekly report",         "battlecards": "⚔️ Battlecards",         "compare_runs": "🔄 Compare runs",         "eval_metrics": "📈 Eval metrics",         "run_history": "📝 Run history",         "run_pipeline": "🚀 Run pipeline",         "use_sample": "Use sample dataset (offline, 0 LLM cost)",         "competitor_config": "Competitor config",         "no_reports": "No reports yet. Run a pipeline to generate one.",         "no_runs": "No runs yet. Trigger one from the sidebar.",         "last_run": "Last run",         "weekly_signals": "Weekly signals",         "tracked_competitors": "Tracked competitors",         "citation_coverage": "Citation coverage",         "signal_trend": "Signal trend",         "signal_distribution": "Signal distribution",         "recent_activity": "Recent activity",         "pipeline_running": "Pipeline running...",         "pipeline_done": "Done",         "pipeline_failed": "Pipeline failed",         "download_md": "📥 Download Markdown",         "select_report": "Select report",         "compare": "Compare runs",         "week_over_week": "Week-over-week comparison",         "pick_two_runs": "Pick two runs to see what changed.",         "new_claims": "New claims",         "removed_claims": "Removed claims",         "per_competitor": "Per-competitor signal counts",         "baseline": "Baseline",         "current": "Current",         "live_progress": "Live progress",         "inspect_run": "Inspect a run",         "status": "status",         "started": "started",         "warnings": "Warnings",     }, }  def t(key: str) -> str:     """Return translated string for the current language."""     lang = st.session_state.get("lang", "zh")     return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)  def render_lang_toggle() -> None:     """Render a language toggle in the sidebar."""     lang = st.session_state.get("lang", "zh")     label = "🌐 中文" if lang == "en" else "🌐 English"     if st.button(label, key="lang_toggle"):         st.session_state["lang"] = "en" if lang == "zh" else "zh"         st.rerun() ```  **第三步**：修改 `ui/app.py` 和所有 components，把硬编码英文替换为 `t("key")`  示例（app.py）： ```python from signalpulse.ui.i18n import t, render_lang_toggle  # 在 sidebar 中加语言切换 render_lang_toggle()  tab_dashboard, tab_weekly, tab_battle, tab_compare, tab_evals, tab_runs = st.tabs(     [t("dashboard"), t("weekly_report"), t("battlecards"),      t("compare_runs"), t("eval_metrics"), t("run_history")] ) ```  ### 2.4 验证  ```bash .venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py # 1. 界面应为暗色主题 # 2. 默认显示中文 # 3. 点语言切换按钮可切到英文 ```  ---  ## Task 3: 报告可视化（雷达图 + 柱状图 + 趋势图）  ### 3.1 问题  报告只有纯 Markdown 文本，没有图表。竞品对比用文字描述不直观。  ### 3.2 改法  **新增文件**：`src/signalpulse/ui/components/charts.py`  **图表1：竞品能力雷达图（在 Battlecard tab 中显示）**  ```python import plotly.graph_objects as go  def render_battlecard_radar(competitors_data: dict) -> None:     """Render a radar chart comparing competitors across dimensions.          Dimensions: product_velocity, pricing_aggressiveness,                  ecosystem_depth, enterprise_readiness, community_momentum     """     fig = go.Figure()     categories = ["产品迭代", "定价激进", "生态深度", "企业就绪", "社区势头"]          for name, scores in competitors_data.items():         fig.add_trace(go.Scatterpolar(             r=scores,             theta=categories,             fill='toself',             name=name,         ))          fig.update_layout(         polar=dict(radialaxis=dict(visible=True, range=[0, 10])),         showlegend=True,         title="竞品能力雷达图",     )     st.plotly_chart(fig, use_container_width=True) ```  **图表2：信号柱状图（在 Weekly report tab 中显示）**  ```python def render_signal_bar_chart(signals: list) -> None:     """Grouped bar chart: signal count per competitor per type."""     import plotly.express as px          df = pd.DataFrame(signals)     fig = px.bar(df, x="competitor", y="count", color="signal_type",                  barmode="group", title="各竞品信号分布")     st.plotly_chart(fig, use_container_width=True) ```  **图表3：趋势折线图（在 Compare tab 中显示）**  ```python def render_trend_chart(runs_data: list) -> None:     """Multi-line trend: signal count over time per competitor."""     import plotly.express as px          df = pd.DataFrame(runs_data)     fig = px.line(df, x="run_date", y="signal_count", color="competitor",                   markers=True, title="信号趋势")     st.plotly_chart(fig, use_container_width=True) ```  **修改 `report_viewer.py`**：在 Markdown 渲染之前，插入对应图表  ```python # 在 render_report_viewer 中，加载 markdown 之前： if report_type == "battlecard":     from signalpulse.ui.components.charts import render_battlecard_radar     # 从 DB 或 report metadata 提取竞品评分数据     render_battlecard_radar(competitors_data)  if report_type == "weekly":     from signalpulse.ui.components.charts import render_signal_bar_chart     render_signal_bar_chart(signals_data) ```  ### 3.3 依赖  在 `pyproject.toml` 中确认已有 `plotly`，没有则添加：  ```toml plotly >= 5.18 pandas >= 2.0 ```  ### 3.4 验证  ```bash .venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py # 1. Battlecard tab 应显示雷达图 # 2. Weekly report tab 应显示柱状图 # 3. Compare tab 应显示趋势折线图 ```  ---  ## Task 4: 竞品管理 UI + 报告导出  ### 4.1 问题  添加竞品只能改 YAML 文件，普通用户做不到。报告只能下载 Markdown，实际工作中需要 PDF/Excel。  ### 4.2 改法  **新增文件**：`src/signalpulse/ui/components/competitor_manager.py`  **功能1：竞品列表（在 sidebar 中）**  ```python def render_competitor_manager() -> None:     """Sidebar section: add/edit/delete competitors."""     st.subheader("🏢 竞品管理")          # 列出当前竞品     companies = get_all_companies()  # 从 DB 读     for c in companies:         col1, col2, col3 = st.columns([5, 1, 1])         col1.text(f"{c.name} ({c.domain})")         if col2.button("✏️", key=f"edit_{c.id}"):             st.session_state["editing_company"] = c.id         if col3.button("🗑️", key=f"del_{c.id}"):             delete_company(c.id)             st.rerun()          # 添加新竞品     with st.expander("➕ 添加竞品"):         name = st.text_input("竞品名称")         domain = st.text_input("官网域名")         github = st.text_input("GitHub 仓库（可选）")         rss_feeds = st.text_area("RSS 源（每行一个，可选）")         if st.button("添加", key="add_competitor"):             if name and domain:                 add_company(name=name, domain=domain, github=github)                 st.success(f"已添加 {name}")                 st.rerun()             else:                 st.error("名称和域名为必填") ```  **功能2：报告导出（在每个报告 tab 的顶部）**  在 `report_viewer.py` 中添加导出按钮：  ```python col_md, col_pdf, col_xlsx = st.columns(3)  with col_md:     st.download_button("📥 Markdown", content, file_name=filename)  with col_pdf:     if st.button("📄 导出 PDF"):         from signalpulse.reporting.export import markdown_to_pdf         pdf_bytes = markdown_to_pdf(report_content, title=report_title)         st.download_button("下载 PDF", pdf_bytes, file_name=filename.replace(".md", ".pdf"))  with col_xlsx:     if st.button("📊 导出 Excel"):         from signalpulse.reporting.export import signals_to_xlsx         xlsx_bytes = signals_to_xlsx(run_id)         st.download_button("下载 Excel", xlsx_bytes, file_name=filename.replace(".md", ".xlsx")) ```  **新增文件**：`src/signalpulse/reporting/export.py`  ```python """Export reports to PDF and Excel."""  def markdown_to_pdf(md_content: str, title: str = "SignalPulse Report") -> bytes:     """Convert markdown to PDF using weasyprint or markdown-pdf."""     # 方案A: 用 markdown + weasyprint     import markdown     from weasyprint import HTML          html = markdown.markdown(md_content, extensions=["tables", "fenced_code"])     styled = f"""<html><head><meta charset="utf-8">     <style>body {{ font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }}     table {{ border-collapse: collapse; width: 100%; }}     th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}</style>     </head><body><h1>{title}</h1>{html}</body></html>"""          pdf = HTML(string=styled).write_pdf()     return bytes(pdf)   def signals_to_xlsx(run_id: str) -> bytes:     """Export signals for a run to Excel."""     import io     import pandas as pd     from signalpulse.db.session import get_session     from signalpulse.models.base import CrawlRun, Signal          session = get_session()     signals = session.query(Signal).filter_by(crawl_run_id=run_id).all()          df = pd.DataFrame([{         "竞品": s.competitor,         "类型": s.signal_type,         "发现": s.finding,         "来源": s.source_url,         "时间": s.detected_at,         "严重度": s.severity,     } for s in signals])          buf = io.BytesIO()     df.to_excel(buf, index=False, sheet_name="Signals")     return buf.getvalue() ```  ### 4.3 依赖  ```toml weasyprint >= 60   # PDF 导出 openpyxl >= 3.1    # Excel 导出（pandas 已包含） ```  注意：weasyprint 在 Windows 上需要安装 GTK 运行时。 如果安装困难，可改用 `fpdf2`（纯 Python，无系统依赖）作为备选：  ```python # 备选方案：fpdf2 def markdown_to_pdf(md_content: str, title: str = "SignalPulse Report") -> bytes:     from fpdf import FPDF     pdf = FPDF()     pdf.add_page()     pdf.set_font("Helvetica", size=12)     pdf.cell(0, 10, title, ln=True, align="C")     # 简单处理：每行一段     for line in md_content.split("\n"):         line = line.strip()         if line:             pdf.multi_cell(0, 7, line)     return bytes(pdf.output()) ```  ### 4.4 验证  ```bash .venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py # 1. 侧边栏应显示竞品管理区域 # 2. 可以添加/删除竞品 # 3. 报告页面有 Markdown / PDF / Excel 三个下载按钮 ```  ---  ## Task 5: 运行体验优化 + PowerShell 报错修复  ### 5.1 问题  1. PowerShell 中运行 pipeline 时，loguru 的 stderr 输出被当作错误（红色显示 `NativeCommandError`） 2. 运行时只有 spinner "Pipeline running..."，没有步骤进度 3. 错误信息不友好，直接显示 Python traceback  ### 5.2 改法  **修复1：PowerShell stderr 误报**  在 `cli.py` 的 `main()` 函数开头添加：  ```python def main() -> int:     # 修复 PowerShell 把 stderr 当错误的问题     import sys     if sys.stderr is not None:         try:             sys.stderr.reconfigure(errors="replace")         except Exception:             pass     # ... 原有代码 ```  同时在项目根目录新增 `run.ps1`（PowerShell 启动脚本）：  ```powershell # run.ps1 — SignalPulse PowerShell 启动脚本 # 解决 PowerShell 把 stderr 当错误的问题 $ErrorActionPreference = "SilentlyContinue" & .venv\Scripts\python.exe -m signalpulse @args $ErrorActionPreference = "Continue" ```  **修复2：运行步骤进度**  修改 `sidebar.py` 的 pipeline 运行逻辑，添加步骤提示：  ```python if run_clicked:     progress = st.progress(0, text="准备运行...")          steps = [         (0.1, "📋 加载配置..."),         (0.2, "📥 采集数据..."),         (0.3, "🔄 标准化文档..."),         (0.4, "✂️ 切片 & 索引..."),         (0.5, "🔍 提取信号..."),         (0.6, "📊 分析竞品动态..."),         (0.7, "✅ 验证引用..."),         (0.8, "⚔️ 生成竞品卡片..."),         (0.9, "📄 生成周报..."),     ]          try:         pipeline = build_pipeline(use_sample_dataset=use_sample)         initial: GraphState = {             "target_company": target_name,             "warnings": [],             "metrics": {},             "status": "pending",         }                  # 使用 astream_events 获取实时进度         async def run_with_progress():             result = None             async for event in pipeline.astream_events(initial, version="v2"):                 kind = event["event"]                 if kind == "on_chain_start":                     name = event.get("name", "")                     for pct, label in steps:                         if name in label or any(kw in name for kw in                              ["load", "collect", "normalize", "index", "extract", "analyze", "check", "battlecard", "weekly"]):                             progress.progress(pct, text=label)                             break                 elif kind == "on_chain_end":                     result = event.get("data", {}).get("output", result)             return result                  result = asyncio.run(run_with_progress())         progress.progress(1.0, text="✅ 运行完成！")     except Exception as exc:         progress.progress(1.0, text="❌ 运行失败")         # 友好错误信息         user_msg = _friendly_error(str(exc))         st.error(user_msg)         result = {"status": "failed", "warnings": [str(exc)], "metrics": {}} ```  **修复3：友好错误信息**  在 `sidebar.py` 中添加错误翻译函数：  ```python def _friendly_error(exc_str: str) -> str:     """Translate common Python errors into user-friendly Chinese messages."""     if "ConnectionError" in exc_str or "timeout" in exc_str.lower():         return "🌐 网络连接失败，请检查网络后重试。"     if "OPENAI_API_KEY" in exc_str:         return "🔑 API Key 未配置，请在 .env 中设置 OPENAI_API_KEY。"     if "rate_limit" in exc_str.lower():         return "⏱️ API 调用频率超限，请稍后重试。"     if "chroma" in exc_str.lower():         return "💾 向量数据库异常，请尝试清理 data/chroma 目录后重启。"     if "fastembed" in exc_str.lower() or "huggingface" in exc_str.lower():         return "📥 嵌入模型下载失败，请检查网络连接。将尝试使用备用方案。"     if "No module named" in exc_str:         return "📦 缺少依赖包，请运行: pip install -e ."     # 默认：截断长错误     return f"❌ 运行出错：{exc_str[:200]}" ```  ### 5.3 验证  ```bash # 测试 PowerShell 脚本 powershell -File run.ps1 run --config configs/competitors.ai-coding.yaml --use-sample-dataset # 应无红色报错  # 测试 UI 进度 .venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py # 点击"运行管道"后应显示步骤进度条  # 测试友好错误 # 故意输错 API key，运行管道，应显示中文友好提示 ```  ---  ## 代码规范  1. 所有新增文件有 module docstring 2. 所有 public 函数有 type hints + docstring 3. 使用 `i18n.t()` 做文本国际化，不硬编码中英文 4. plotly 图表统一暗色主题：`template="plotly_dark"` 5. 新增依赖写进 `pyproject.toml` 6. 一个 commit，消息：`feat(v4): dashboard, i18n, charts, competitor manager, UX polish`
+# SignalPulse 产品化改进执行文档（V4）
+
+> **生成时间**：2026-06-25
+> **项目路径**：D:\SignalPulse（竞品调研）
+> **目标**：从"技术项目"升级为"可用的产品"
+> **本轮**：5 个 Task，按优先级排序
+
+---
+
+## Task 1: Dashboard 首页
+
+### 1.1 问题
+
+打开 Streamlit 直接是 5 个空 tab，没有概览，用户不知道系统状态。
+
+### 1.2 改法
+
+**新增文件**：`src/signalpulse/ui/components/dashboard.py`
+
+在 `ui/app.py` 中新增第一个 tab "Dashboard"，作为默认首页。
+
+Dashboard 包含 4 个区域：
+
+**区域1：状态卡片（顶部4个metric）**
+
+```python
+# 从 DB 查询：
+# 1. 最近一次运行状态（completed/failed/pending）
+# 2. 本周信号总数（本周所有 run 的 signal count 之和）
+# 3. 追踪竞品数（companies 表 count）
+# 4. 平均 citation coverage（最近 5 次 eval_run 均值）
+
+cols = st.columns(4)
+cols[0].metric("最近运行", status, delta=delta_str)
+cols[1].metric("本周信号", signal_count)
+cols[2].metric("追踪竞品", company_count)
+cols[3].metric("引用覆盖率", f"{avg_citation:.0%}")
+```
+
+**区域2：信号趋势图（折线图）**
+
+```python
+# 最近 8 次运行的信号数量趋势
+import plotly.express as px
+
+fig = px.line(df, x="run_date", y="signal_count", color="competitor",
+              title="信号趋势", markers=True)
+st.plotly_chart(fig, use_container_width=True)
+```
+
+**区域3：信号分布（饼图）**
+
+```python
+# 按 signal_type 分布：product / hiring / pricing / gtm / risk
+fig = px.pie(df, names="signal_type", title="信号类型分布")
+st.plotly_chart(fig, use_container_width=True)
+```
+
+**区域4：最近活动（时间线）**
+
+```python
+# 最近 10 条信号，按时间倒序
+for signal in recent_signals:
+    st.markdown(f"**[{signal.signal_type}]** {signal.finding[:80]}... — _{signal.competitor}_")
+```
+
+### 1.3 修改 `ui/app.py`
+
+```python
+# 新增 dashboard tab 作为第一个 tab
+from signalpulse.ui.components.dashboard import render_dashboard
+
+tab_dashboard, tab_weekly, tab_battle, tab_compare, tab_evals, tab_runs = st.tabs(
+    ["📊 Dashboard", "📋 Weekly report", "⚔️ Battlecards", "🔄 Compare runs", "📈 Eval metrics", "📝 Run history"]
+)
+
+with tab_dashboard:
+    render_dashboard()
+```
+
+### 1.4 验证
+
+```bash
+.venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py
+# 首页应显示 Dashboard，有 4 个 metric 卡片 + 趋势图 + 饼图 + 活动时间线
+```
+
+---
+
+## Task 2: 中文界面 + 暗色主题
+
+### 2.1 问题
+
+UI 全英文，国内用户不友好。默认白色主题，没有品牌感。
+
+### 2.2 改法
+
+**第一步**：新增 `.streamlit/config.toml`（项目根目录）
+
+```toml
+[theme]
+primaryColor = "#6366f1"        # indigo-500，品牌色
+backgroundColor = "#0e1117"      # 暗色背景
+secondaryBackgroundColor = "#1a1d23"
+textColor = "#fafafa"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+maxUploadSize = 50
+```
+
+**第二步**：新增 `src/signalpulse/ui/i18n.py`（国际化模块）
+
+```python
+"""Simple i18n: Chinese / English toggle."""
+import streamlit as st
+
+TRANSLATIONS = {
+    "zh": {
+        "dashboard": "📊 仪表盘",
+        "weekly_report": "📋 周报",
+        "battlecards": "⚔️ 竞品卡片",
+        "compare_runs": "🔄 对比分析",
+        "eval_metrics": "📈 评估指标",
+        "run_history": "📝 运行记录",
+        "run_pipeline": "🚀 运行管道",
+        "use_sample": "使用示例数据（离线，0 LLM 费用）",
+        "competitor_config": "竞品配置文件",
+        "no_reports": "暂无报告，请先运行管道生成。",
+        "no_runs": "暂无运行记录，请在侧边栏触发运行。",
+        "last_run": "最近运行",
+        "weekly_signals": "本周信号",
+        "tracked_competitors": "追踪竞品",
+        "citation_coverage": "引用覆盖率",
+        "signal_trend": "信号趋势",
+        "signal_distribution": "信号类型分布",
+        "recent_activity": "最近动态",
+        "pipeline_running": "管道运行中...",
+        "pipeline_done": "运行完成",
+        "pipeline_failed": "运行失败",
+        "download_md": "📥 下载 Markdown",
+        "select_report": "选择报告",
+        "compare": "对比运行",
+        "week_over_week": "周对比分析",
+        "pick_two_runs": "选择两次运行查看变化",
+        "new_claims": "新增发现",
+        "removed_claims": "消失的发现",
+        "per_competitor": "各竞品信号数",
+        "baseline": "基线",
+        "current": "当前",
+        "live_progress": "实时进度",
+        "inspect_run": "查看运行详情",
+        "status": "状态",
+        "started": "开始时间",
+        "warnings": "警告",
+    },
+    "en": {
+        "dashboard": "📊 Dashboard",
+        "weekly_report": "📋 Weekly report",
+        "battlecards": "⚔️ Battlecards",
+        "compare_runs": "🔄 Compare runs",
+        "eval_metrics": "📈 Eval metrics",
+        "run_history": "📝 Run history",
+        "run_pipeline": "🚀 Run pipeline",
+        "use_sample": "Use sample dataset (offline, 0 LLM cost)",
+        "competitor_config": "Competitor config",
+        "no_reports": "No reports yet. Run a pipeline to generate one.",
+        "no_runs": "No runs yet. Trigger one from the sidebar.",
+        "last_run": "Last run",
+        "weekly_signals": "Weekly signals",
+        "tracked_competitors": "Tracked competitors",
+        "citation_coverage": "Citation coverage",
+        "signal_trend": "Signal trend",
+        "signal_distribution": "Signal distribution",
+        "recent_activity": "Recent activity",
+        "pipeline_running": "Pipeline running...",
+        "pipeline_done": "Done",
+        "pipeline_failed": "Pipeline failed",
+        "download_md": "📥 Download Markdown",
+        "select_report": "Select report",
+        "compare": "Compare runs",
+        "week_over_week": "Week-over-week comparison",
+        "pick_two_runs": "Pick two runs to see what changed.",
+        "new_claims": "New claims",
+        "removed_claims": "Removed claims",
+        "per_competitor": "Per-competitor signal counts",
+        "baseline": "Baseline",
+        "current": "Current",
+        "live_progress": "Live progress",
+        "inspect_run": "Inspect a run",
+        "status": "status",
+        "started": "started",
+        "warnings": "Warnings",
+    },
+}
+
+def t(key: str) -> str:
+    """Return translated string for the current language."""
+    lang = st.session_state.get("lang", "zh")
+    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
+
+def render_lang_toggle() -> None:
+    """Render a language toggle in the sidebar."""
+    lang = st.session_state.get("lang", "zh")
+    label = "🌐 中文" if lang == "en" else "🌐 English"
+    if st.button(label, key="lang_toggle"):
+        st.session_state["lang"] = "en" if lang == "zh" else "zh"
+        st.rerun()
+```
+
+**第三步**：修改 `ui/app.py` 和所有 components，把硬编码英文替换为 `t("key")`
+
+示例（app.py）：
+```python
+from signalpulse.ui.i18n import t, render_lang_toggle
+
+# 在 sidebar 中加语言切换
+render_lang_toggle()
+
+tab_dashboard, tab_weekly, tab_battle, tab_compare, tab_evals, tab_runs = st.tabs(
+    [t("dashboard"), t("weekly_report"), t("battlecards"),
+     t("compare_runs"), t("eval_metrics"), t("run_history")]
+)
+```
+
+### 2.4 验证
+
+```bash
+.venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py
+# 1. 界面应为暗色主题
+# 2. 默认显示中文
+# 3. 点语言切换按钮可切到英文
+```
+
+---
+
+## Task 3: 报告可视化（雷达图 + 柱状图 + 趋势图）
+
+### 3.1 问题
+
+报告只有纯 Markdown 文本，没有图表。竞品对比用文字描述不直观。
+
+### 3.2 改法
+
+**新增文件**：`src/signalpulse/ui/components/charts.py`
+
+**图表1：竞品能力雷达图（在 Battlecard tab 中显示）**
+
+```python
+import plotly.graph_objects as go
+
+def render_battlecard_radar(competitors_data: dict) -> None:
+    """Render a radar chart comparing competitors across dimensions.
+    
+    Dimensions: product_velocity, pricing_aggressiveness, 
+                ecosystem_depth, enterprise_readiness, community_momentum
+    """
+    fig = go.Figure()
+    categories = ["产品迭代", "定价激进", "生态深度", "企业就绪", "社区势头"]
+    
+    for name, scores in competitors_data.items():
+        fig.add_trace(go.Scatterpolar(
+            r=scores,
+            theta=categories,
+            fill='toself',
+            name=name,
+        ))
+    
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 10])),
+        showlegend=True,
+        title="竞品能力雷达图",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+```
+
+**图表2：信号柱状图（在 Weekly report tab 中显示）**
+
+```python
+def render_signal_bar_chart(signals: list) -> None:
+    """Grouped bar chart: signal count per competitor per type."""
+    import plotly.express as px
+    
+    df = pd.DataFrame(signals)
+    fig = px.bar(df, x="competitor", y="count", color="signal_type",
+                 barmode="group", title="各竞品信号分布")
+    st.plotly_chart(fig, use_container_width=True)
+```
+
+**图表3：趋势折线图（在 Compare tab 中显示）**
+
+```python
+def render_trend_chart(runs_data: list) -> None:
+    """Multi-line trend: signal count over time per competitor."""
+    import plotly.express as px
+    
+    df = pd.DataFrame(runs_data)
+    fig = px.line(df, x="run_date", y="signal_count", color="competitor",
+                  markers=True, title="信号趋势")
+    st.plotly_chart(fig, use_container_width=True)
+```
+
+**修改 `report_viewer.py`**：在 Markdown 渲染之前，插入对应图表
+
+```python
+# 在 render_report_viewer 中，加载 markdown 之前：
+if report_type == "battlecard":
+    from signalpulse.ui.components.charts import render_battlecard_radar
+    # 从 DB 或 report metadata 提取竞品评分数据
+    render_battlecard_radar(competitors_data)
+
+if report_type == "weekly":
+    from signalpulse.ui.components.charts import render_signal_bar_chart
+    render_signal_bar_chart(signals_data)
+```
+
+### 3.3 依赖
+
+在 `pyproject.toml` 中确认已有 `plotly`，没有则添加：
+
+```toml
+plotly >= 5.18
+pandas >= 2.0
+```
+
+### 3.4 验证
+
+```bash
+.venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py
+# 1. Battlecard tab 应显示雷达图
+# 2. Weekly report tab 应显示柱状图
+# 3. Compare tab 应显示趋势折线图
+```
+
+---
+
+## Task 4: 竞品管理 UI + 报告导出
+
+### 4.1 问题
+
+添加竞品只能改 YAML 文件，普通用户做不到。报告只能下载 Markdown，实际工作中需要 PDF/Excel。
+
+### 4.2 改法
+
+**新增文件**：`src/signalpulse/ui/components/competitor_manager.py`
+
+**功能1：竞品列表（在 sidebar 中）**
+
+```python
+def render_competitor_manager() -> None:
+    """Sidebar section: add/edit/delete competitors."""
+    st.subheader("🏢 竞品管理")
+    
+    # 列出当前竞品
+    companies = get_all_companies()  # 从 DB 读
+    for c in companies:
+        col1, col2, col3 = st.columns([5, 1, 1])
+        col1.text(f"{c.name} ({c.domain})")
+        if col2.button("✏️", key=f"edit_{c.id}"):
+            st.session_state["editing_company"] = c.id
+        if col3.button("🗑️", key=f"del_{c.id}"):
+            delete_company(c.id)
+            st.rerun()
+    
+    # 添加新竞品
+    with st.expander("➕ 添加竞品"):
+        name = st.text_input("竞品名称")
+        domain = st.text_input("官网域名")
+        github = st.text_input("GitHub 仓库（可选）")
+        rss_feeds = st.text_area("RSS 源（每行一个，可选）")
+        if st.button("添加", key="add_competitor"):
+            if name and domain:
+                add_company(name=name, domain=domain, github=github)
+                st.success(f"已添加 {name}")
+                st.rerun()
+            else:
+                st.error("名称和域名为必填")
+```
+
+**功能2：报告导出（在每个报告 tab 的顶部）**
+
+在 `report_viewer.py` 中添加导出按钮：
+
+```python
+col_md, col_pdf, col_xlsx = st.columns(3)
+
+with col_md:
+    st.download_button("📥 Markdown", content, file_name=filename)
+
+with col_pdf:
+    if st.button("📄 导出 PDF"):
+        from signalpulse.reporting.export import markdown_to_pdf
+        pdf_bytes = markdown_to_pdf(report_content, title=report_title)
+        st.download_button("下载 PDF", pdf_bytes, file_name=filename.replace(".md", ".pdf"))
+
+with col_xlsx:
+    if st.button("📊 导出 Excel"):
+        from signalpulse.reporting.export import signals_to_xlsx
+        xlsx_bytes = signals_to_xlsx(run_id)
+        st.download_button("下载 Excel", xlsx_bytes, file_name=filename.replace(".md", ".xlsx"))
+```
+
+**新增文件**：`src/signalpulse/reporting/export.py`
+
+```python
+"""Export reports to PDF and Excel."""
+
+def markdown_to_pdf(md_content: str, title: str = "SignalPulse Report") -> bytes:
+    """Convert markdown to PDF using weasyprint or markdown-pdf."""
+    # 方案A: 用 markdown + weasyprint
+    import markdown
+    from weasyprint import HTML
+    
+    html = markdown.markdown(md_content, extensions=["tables", "fenced_code"])
+    styled = f"""<html><head><meta charset="utf-8">
+    <style>body {{ font-family: sans-serif; max-width: 800px; margin: auto; padding: 20px; }}
+    table {{ border-collapse: collapse; width: 100%; }}
+    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}</style>
+    </head><body><h1>{title}</h1>{html}</body></html>"""
+    
+    pdf = HTML(string=styled).write_pdf()
+    return bytes(pdf)
+
+
+def signals_to_xlsx(run_id: str) -> bytes:
+    """Export signals for a run to Excel."""
+    import io
+    import pandas as pd
+    from signalpulse.db.session import get_session
+    from signalpulse.models.base import CrawlRun, Signal
+    
+    session = get_session()
+    signals = session.query(Signal).filter_by(crawl_run_id=run_id).all()
+    
+    df = pd.DataFrame([{
+        "竞品": s.competitor,
+        "类型": s.signal_type,
+        "发现": s.finding,
+        "来源": s.source_url,
+        "时间": s.detected_at,
+        "严重度": s.severity,
+    } for s in signals])
+    
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False, sheet_name="Signals")
+    return buf.getvalue()
+```
+
+### 4.3 依赖
+
+```toml
+weasyprint >= 60   # PDF 导出
+openpyxl >= 3.1    # Excel 导出（pandas 已包含）
+```
+
+注意：weasyprint 在 Windows 上需要安装 GTK 运行时。
+如果安装困难，可改用 `fpdf2`（纯 Python，无系统依赖）作为备选：
+
+```python
+# 备选方案：fpdf2
+def markdown_to_pdf(md_content: str, title: str = "SignalPulse Report") -> bytes:
+    from fpdf import FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=12)
+    pdf.cell(0, 10, title, ln=True, align="C")
+    # 简单处理：每行一段
+    for line in md_content.split("\n"):
+        line = line.strip()
+        if line:
+            pdf.multi_cell(0, 7, line)
+    return bytes(pdf.output())
+```
+
+### 4.4 验证
+
+```bash
+.venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py
+# 1. 侧边栏应显示竞品管理区域
+# 2. 可以添加/删除竞品
+# 3. 报告页面有 Markdown / PDF / Excel 三个下载按钮
+```
+
+---
+
+## Task 5: 运行体验优化 + PowerShell 报错修复
+
+### 5.1 问题
+
+1. PowerShell 中运行 pipeline 时，loguru 的 stderr 输出被当作错误（红色显示 `NativeCommandError`）
+2. 运行时只有 spinner "Pipeline running..."，没有步骤进度
+3. 错误信息不友好，直接显示 Python traceback
+
+### 5.2 改法
+
+**修复1：PowerShell stderr 误报**
+
+在 `cli.py` 的 `main()` 函数开头添加：
+
+```python
+def main() -> int:
+    # 修复 PowerShell 把 stderr 当错误的问题
+    import sys
+    if sys.stderr is not None:
+        try:
+            sys.stderr.reconfigure(errors="replace")
+        except Exception:
+            pass
+    # ... 原有代码
+```
+
+同时在项目根目录新增 `run.ps1`（PowerShell 启动脚本）：
+
+```powershell
+# run.ps1 — SignalPulse PowerShell 启动脚本
+# 解决 PowerShell 把 stderr 当错误的问题
+$ErrorActionPreference = "SilentlyContinue"
+& .venv\Scripts\python.exe -m signalpulse @args
+$ErrorActionPreference = "Continue"
+```
+
+**修复2：运行步骤进度**
+
+修改 `sidebar.py` 的 pipeline 运行逻辑，添加步骤提示：
+
+```python
+if run_clicked:
+    progress = st.progress(0, text="准备运行...")
+    
+    steps = [
+        (0.1, "📋 加载配置..."),
+        (0.2, "📥 采集数据..."),
+        (0.3, "🔄 标准化文档..."),
+        (0.4, "✂️ 切片 & 索引..."),
+        (0.5, "🔍 提取信号..."),
+        (0.6, "📊 分析竞品动态..."),
+        (0.7, "✅ 验证引用..."),
+        (0.8, "⚔️ 生成竞品卡片..."),
+        (0.9, "📄 生成周报..."),
+    ]
+    
+    try:
+        pipeline = build_pipeline(use_sample_dataset=use_sample)
+        initial: GraphState = {
+            "target_company": target_name,
+            "warnings": [],
+            "metrics": {},
+            "status": "pending",
+        }
+        
+        # 使用 astream_events 获取实时进度
+        async def run_with_progress():
+            result = None
+            async for event in pipeline.astream_events(initial, version="v2"):
+                kind = event["event"]
+                if kind == "on_chain_start":
+                    name = event.get("name", "")
+                    for pct, label in steps:
+                        if name in label or any(kw in name for kw in 
+                            ["load", "collect", "normalize", "index", "extract", "analyze", "check", "battlecard", "weekly"]):
+                            progress.progress(pct, text=label)
+                            break
+                elif kind == "on_chain_end":
+                    result = event.get("data", {}).get("output", result)
+            return result
+        
+        result = asyncio.run(run_with_progress())
+        progress.progress(1.0, text="✅ 运行完成！")
+    except Exception as exc:
+        progress.progress(1.0, text="❌ 运行失败")
+        # 友好错误信息
+        user_msg = _friendly_error(str(exc))
+        st.error(user_msg)
+        result = {"status": "failed", "warnings": [str(exc)], "metrics": {}}
+```
+
+**修复3：友好错误信息**
+
+在 `sidebar.py` 中添加错误翻译函数：
+
+```python
+def _friendly_error(exc_str: str) -> str:
+    """Translate common Python errors into user-friendly Chinese messages."""
+    if "ConnectionError" in exc_str or "timeout" in exc_str.lower():
+        return "🌐 网络连接失败，请检查网络后重试。"
+    if "OPENAI_API_KEY" in exc_str:
+        return "🔑 API Key 未配置，请在 .env 中设置 OPENAI_API_KEY。"
+    if "rate_limit" in exc_str.lower():
+        return "⏱️ API 调用频率超限，请稍后重试。"
+    if "chroma" in exc_str.lower():
+        return "💾 向量数据库异常，请尝试清理 data/chroma 目录后重启。"
+    if "fastembed" in exc_str.lower() or "huggingface" in exc_str.lower():
+        return "📥 嵌入模型下载失败，请检查网络连接。将尝试使用备用方案。"
+    if "No module named" in exc_str:
+        return "📦 缺少依赖包，请运行: pip install -e ."
+    # 默认：截断长错误
+    return f"❌ 运行出错：{exc_str[:200]}"
+```
+
+### 5.3 验证
+
+```bash
+# 测试 PowerShell 脚本
+powershell -File run.ps1 run --config configs/competitors.ai-coding.yaml --use-sample-dataset
+# 应无红色报错
+
+# 测试 UI 进度
+.venv\Scripts\python.exe -m streamlit run src/signalpulse/ui/app.py
+# 点击"运行管道"后应显示步骤进度条
+
+# 测试友好错误
+# 故意输错 API key，运行管道，应显示中文友好提示
+```
+
+---
+
+## 代码规范
+
+1. 所有新增文件有 module docstring
+2. 所有 public 函数有 type hints + docstring
+3. 使用 `i18n.t()` 做文本国际化，不硬编码中英文
+4. plotly 图表统一暗色主题：`template="plotly_dark"`
+5. 新增依赖写进 `pyproject.toml`
+6. 一个 commit，消息：`feat(v4): dashboard, i18n, charts, competitor manager, UX polish`

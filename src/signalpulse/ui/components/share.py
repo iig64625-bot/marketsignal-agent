@@ -1,1 +1,109 @@
-"""Share v1: render a selected Markdown report to a standalone dark-themed HTML.""" from __future__ import annotations  import base64 import shutil from datetime import datetime from pathlib import Path  import streamlit as st  from signalpulse.db.session import get_session from signalpulse.models import Report from signalpulse.ui.i18n import t   SHARE_DIR = Path("data/shared") SHARE_DIR.mkdir(parents=True, exist_ok=True)   def _list_reports(report_type: str) -> list:     with get_session() as s:         return list(s.query(Report).filter_by(report_type=report_type)                     .order_by(Report.created_at.desc()).limit(20).all())   def _render_html(title: str, md: str) -> str:     """Wrap a markdown report in a self-contained dark HTML page."""     html_body = md  # markdown source is fine; we just preserve formatting     safe = html_body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")     return f"""<!DOCTYPE html> <html lang="zh"> <head> <meta charset="utf-8"> <title>{title} — SignalPulse</title> <style>   body {{     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",                  "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;     background: #0e1117; color: #e0e0e0; max-width: 880px;     margin: 40px auto; padding: 32px 40px; line-height: 1.7;     border: 1px solid #2a2d33; border-radius: 12px;   }}   h1, h2, h3 {{ color: #818cf8; border-bottom: 1px solid #2a2d33; padding-bottom: 6px; }}   code {{ background: #1e1e1e; color: #fbbf24; padding: 2px 6px; border-radius: 4px; }}   pre {{ background: #1e1e1e; padding: 12px; border-radius: 6px; overflow-x: auto; }}   table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}   th, td {{ border: 1px solid #2a2d33; padding: 8px 12px; text-align: left; }}   th {{ background: #1a1d23; color: #818cf8; }}   hr {{ border: 0; border-top: 1px solid #2a2d33; margin: 24px 0; }}   .meta {{ color: #888; font-size: 12px; text-align: right; margin-top: 24px; }} </style> </head> <body> <pre style="white-space: pre-wrap; font-family: inherit;">{safe}</pre> <div class="meta">SignalPulse · generated {datetime.now().strftime("%Y-%m-%d %H:%M")}</div> </body> </html>"""   def render_share_panel(report_type: str) -> None:     reports = _list_reports(report_type)     if not reports:         return      with st.expander(t("share_title"), expanded=False):         st.caption(t("share_caption"))         labels = [             f"{(r.title or r.id)[:60]} · {r.created_at.strftime('%m-%d %H:%M') if r.created_at else '?'}"             for r in reports         ]         idx = st.selectbox(             t("select_report"),             options=list(range(len(reports))),             format_func=lambda i: labels[i],             key=f"share_sel_{report_type}",         )         r = reports[idx]         if not r.markdown_path or not Path(r.markdown_path).exists():             st.warning(t("share_no_report"))             return          md = Path(r.markdown_path).read_text(encoding="utf-8", errors="ignore")         html = _render_html(r.title or r.id, md)          c1, c2, c3 = st.columns(3)         with c1:             if st.button(t("share_btn"), key=f"share_btn_{report_type}_{r.id}"):                 fname = f"{report_type}_{r.id[:8]}_{int(datetime.now().timestamp())}.html"                 out = SHARE_DIR / fname                 out.write_text(html, encoding="utf-8")                 st.session_state[f"share_link_{report_type}"] = str(out.absolute())                 st.success(t("share_link_copied"))         with c2:             link = st.session_state.get(f"share_link_{report_type}", "")             if link:                 st.code(link, language="text")         with c3:             b64 = base64.b64encode(html.encode("utf-8")).decode("ascii")             href = f"data:text/html;base64,{b64}"             st.download_button(                 t("share_download_btn"),                 data=html.encode("utf-8"),                 file_name=f"{report_type}_{r.id[:8]}.html",                 mime="text/html",                 key=f"share_dl_{report_type}_{r.id}",             )   __all__ = ["render_share_panel"]
+"""Share v1: render a selected Markdown report to a standalone dark-themed HTML."""
+from __future__ import annotations
+
+import base64
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+import streamlit as st
+
+from signalpulse.db.session import get_session
+from signalpulse.models import Report
+from signalpulse.ui.i18n import t
+
+
+SHARE_DIR = Path("data/shared")
+SHARE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _list_reports(report_type: str) -> list:
+    with get_session() as s:
+        return list(s.query(Report).filter_by(report_type=report_type)
+                    .order_by(Report.created_at.desc()).limit(20).all())
+
+
+def _render_html(title: str, md: str) -> str:
+    """Wrap a markdown report in a self-contained dark HTML page."""
+    html_body = md  # markdown source is fine; we just preserve formatting
+    safe = html_body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>{title} — SignalPulse</title>
+<style>
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+    background: #0e1117; color: #e0e0e0; max-width: 880px;
+    margin: 40px auto; padding: 32px 40px; line-height: 1.7;
+    border: 1px solid #2a2d33; border-radius: 12px;
+  }}
+  h1, h2, h3 {{ color: #818cf8; border-bottom: 1px solid #2a2d33; padding-bottom: 6px; }}
+  code {{ background: #1e1e1e; color: #fbbf24; padding: 2px 6px; border-radius: 4px; }}
+  pre {{ background: #1e1e1e; padding: 12px; border-radius: 6px; overflow-x: auto; }}
+  table {{ border-collapse: collapse; width: 100%; margin: 12px 0; }}
+  th, td {{ border: 1px solid #2a2d33; padding: 8px 12px; text-align: left; }}
+  th {{ background: #1a1d23; color: #818cf8; }}
+  hr {{ border: 0; border-top: 1px solid #2a2d33; margin: 24px 0; }}
+  .meta {{ color: #888; font-size: 12px; text-align: right; margin-top: 24px; }}
+</style>
+</head>
+<body>
+<pre style="white-space: pre-wrap; font-family: inherit;">{safe}</pre>
+<div class="meta">SignalPulse · generated {datetime.now().strftime("%Y-%m-%d %H:%M")}</div>
+</body>
+</html>"""
+
+
+def render_share_panel(report_type: str) -> None:
+    reports = _list_reports(report_type)
+    if not reports:
+        return
+
+    with st.expander(t("share_title"), expanded=False):
+        st.caption(t("share_caption"))
+        labels = [
+            f"{(r.title or r.id)[:60]} · {r.created_at.strftime('%m-%d %H:%M') if r.created_at else '?'}"
+            for r in reports
+        ]
+        idx = st.selectbox(
+            t("select_report"),
+            options=list(range(len(reports))),
+            format_func=lambda i: labels[i],
+            key=f"share_sel_{report_type}",
+        )
+        r = reports[idx]
+        if not r.markdown_path or not Path(r.markdown_path).exists():
+            st.warning(t("share_no_report"))
+            return
+
+        md = Path(r.markdown_path).read_text(encoding="utf-8", errors="ignore")
+        html = _render_html(r.title or r.id, md)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button(t("share_btn"), key=f"share_btn_{report_type}_{r.id}"):
+                fname = f"{report_type}_{r.id[:8]}_{int(datetime.now().timestamp())}.html"
+                out = SHARE_DIR / fname
+                out.write_text(html, encoding="utf-8")
+                st.session_state[f"share_link_{report_type}"] = str(out.absolute())
+                st.success(t("share_link_copied"))
+        with c2:
+            link = st.session_state.get(f"share_link_{report_type}", "")
+            if link:
+                st.code(link, language="text")
+        with c3:
+            b64 = base64.b64encode(html.encode("utf-8")).decode("ascii")
+            href = f"data:text/html;base64,{b64}"
+            st.download_button(
+                t("share_download_btn"),
+                data=html.encode("utf-8"),
+                file_name=f"{report_type}_{r.id[:8]}.html",
+                mime="text/html",
+                key=f"share_dl_{report_type}_{r.id}",
+            )
+
+
+__all__ = ["render_share_panel"]

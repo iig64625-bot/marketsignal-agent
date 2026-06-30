@@ -1,1 +1,118 @@
-{   "run_id": "7a9e60157724",   "started_at": "2026-06-23T13:28:17.354813Z",   "finished_at": "2026-06-23T13:28:18.152426Z",   "spans": [     {       "node": "generate_weekly_report_node",       "entered_at": "2026-06-23T13:28:17.354813Z",       "exited_at": "2026-06-23T13:28:17.365814Z",       "duration_ms": 10.340000000724103,       "status": "ok",       "error": null,       "input_keys": [         "competitor_ids",         "event_ids",         "metrics",         "normalized_document_ids",         "raw_document_ids",         "report_ids",         "run_id",         "signal_ids",         "source_ids",         "status",         "target_company",         "time_window_end",         "time_window_start",         "warnings"       ],       "output_keys": [         "report_ids",         "warnings"       ]     },     {       "node": "generate_battlecards_node",       "entered_at": "2026-06-23T13:28:17.365814Z",       "exited_at": "2026-06-23T13:28:17.377812Z",       "duration_ms": 11.538200000359211,       "status": "ok",       "error": null,       "input_keys": [         "competitor_ids",         "event_ids",         "metrics",         "normalized_document_ids",         "raw_document_ids",         "report_ids",         "run_id",         "signal_ids",         "source_ids",         "status",         "target_company",         "time_window_end",         "time_window_start",         "warnings"       ],       "output_keys": [         "report_ids"       ]     },     {       "node": "check_citations_node",       "entered_at": "2026-06-23T13:28:17.377812Z",       "exited_at": "2026-06-23T13:28:18.130427Z",       "duration_ms": 751.9449999963399,       "status": "ok",       "error": null,       "input_keys": [         "competitor_ids",         "event_ids",         "metrics",         "normalized_document_ids",         "raw_document_ids",         "report_ids",         "run_id",         "signal_ids",         "source_ids",         "status",         "target_company",         "time_window_end",         "time_window_start",         "warnings"       ],       "output_keys": [         "metrics",         "warnings"       ]     },     {       "node": "run_evals_node",       "entered_at": "2026-06-23T13:28:18.131429Z",       "exited_at": "2026-06-23T13:28:18.143429Z",       "duration_ms": 12.561600000481121,       "status": "ok",       "error": null,       "input_keys": [         "competitor_ids",         "event_ids",         "metrics",         "normalized_document_ids",         "raw_document_ids",         "report_ids",         "run_id",         "signal_ids",         "source_ids",         "status",         "target_company",         "time_window_end",         "time_window_start",         "warnings"       ],       "output_keys": [         "metrics"       ]     }   ],   "status": "completed" }
+{
+  "run_id": "7a9e60157724",
+  "started_at": "2026-06-23T13:28:17.354813Z",
+  "finished_at": "2026-06-23T13:28:18.152426Z",
+  "spans": [
+    {
+      "node": "generate_weekly_report_node",
+      "entered_at": "2026-06-23T13:28:17.354813Z",
+      "exited_at": "2026-06-23T13:28:17.365814Z",
+      "duration_ms": 10.340000000724103,
+      "status": "ok",
+      "error": null,
+      "input_keys": [
+        "competitor_ids",
+        "event_ids",
+        "metrics",
+        "normalized_document_ids",
+        "raw_document_ids",
+        "report_ids",
+        "run_id",
+        "signal_ids",
+        "source_ids",
+        "status",
+        "target_company",
+        "time_window_end",
+        "time_window_start",
+        "warnings"
+      ],
+      "output_keys": [
+        "report_ids",
+        "warnings"
+      ]
+    },
+    {
+      "node": "generate_battlecards_node",
+      "entered_at": "2026-06-23T13:28:17.365814Z",
+      "exited_at": "2026-06-23T13:28:17.377812Z",
+      "duration_ms": 11.538200000359211,
+      "status": "ok",
+      "error": null,
+      "input_keys": [
+        "competitor_ids",
+        "event_ids",
+        "metrics",
+        "normalized_document_ids",
+        "raw_document_ids",
+        "report_ids",
+        "run_id",
+        "signal_ids",
+        "source_ids",
+        "status",
+        "target_company",
+        "time_window_end",
+        "time_window_start",
+        "warnings"
+      ],
+      "output_keys": [
+        "report_ids"
+      ]
+    },
+    {
+      "node": "check_citations_node",
+      "entered_at": "2026-06-23T13:28:17.377812Z",
+      "exited_at": "2026-06-23T13:28:18.130427Z",
+      "duration_ms": 751.9449999963399,
+      "status": "ok",
+      "error": null,
+      "input_keys": [
+        "competitor_ids",
+        "event_ids",
+        "metrics",
+        "normalized_document_ids",
+        "raw_document_ids",
+        "report_ids",
+        "run_id",
+        "signal_ids",
+        "source_ids",
+        "status",
+        "target_company",
+        "time_window_end",
+        "time_window_start",
+        "warnings"
+      ],
+      "output_keys": [
+        "metrics",
+        "warnings"
+      ]
+    },
+    {
+      "node": "run_evals_node",
+      "entered_at": "2026-06-23T13:28:18.131429Z",
+      "exited_at": "2026-06-23T13:28:18.143429Z",
+      "duration_ms": 12.561600000481121,
+      "status": "ok",
+      "error": null,
+      "input_keys": [
+        "competitor_ids",
+        "event_ids",
+        "metrics",
+        "normalized_document_ids",
+        "raw_document_ids",
+        "report_ids",
+        "run_id",
+        "signal_ids",
+        "source_ids",
+        "status",
+        "target_company",
+        "time_window_end",
+        "time_window_start",
+        "warnings"
+      ],
+      "output_keys": [
+        "metrics"
+      ]
+    }
+  ],
+  "status": "completed"
+}

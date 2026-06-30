@@ -1,1 +1,34 @@
-"""Settings v1: language + dark mode toggles.""" from __future__ import annotations  import streamlit as st  from signalpulse.ui.i18n import t   def render_settings() -> None:     st.subheader(t("settings"))      c1, c2 = st.columns(2)     with c1:         st.markdown(f"##### {t('language')}")         cur = st.session_state.get("lang", "zh")         choice = st.radio("Language", options=["zh", "en"],                           index=0 if cur == "zh" else 1,                           format_func=lambda x: "中文" if x == "zh" else "English",                           label_visibility="collapsed", key="settings_lang")         if choice != cur:             st.session_state["lang"] = choice             st.rerun()      with c2:         st.markdown(f"##### {t('dark_mode')}")         st.caption(t("settings_theme_hint"))         st.info(t("settings_theme_instruction"))      st.divider()     st.markdown(f"##### {t('settings_about')}")     st.markdown(t("settings_about_text"))   __all__ = ["render_settings"]
+"""Settings v1: language + dark mode toggles."""
+from __future__ import annotations
+
+import streamlit as st
+
+from signalpulse.ui.i18n import t
+
+
+def render_settings() -> None:
+    st.subheader(t("settings"))
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"##### {t('language')}")
+        cur = st.session_state.get("lang", "zh")
+        choice = st.radio("Language", options=["zh", "en"],
+                          index=0 if cur == "zh" else 1,
+                          format_func=lambda x: "中文" if x == "zh" else "English",
+                          label_visibility="collapsed", key="settings_lang")
+        if choice != cur:
+            st.session_state["lang"] = choice
+            st.rerun()
+
+    with c2:
+        st.markdown(f"##### {t('dark_mode')}")
+        st.caption(t("settings_theme_hint"))
+        st.info(t("settings_theme_instruction"))
+
+    st.divider()
+    st.markdown(f"##### {t('settings_about')}")
+    st.markdown(t("settings_about_text"))
+
+
+__all__ = ["render_settings"]

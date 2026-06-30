@@ -1,1 +1,43 @@
-"""SMTP email notifier.""" from __future__ import annotations  import smtplib from email.mime.multipart import MIMEMultipart from email.mime.text import MIMEText  from loguru import logger  from signalpulse.notify.base import Notification, NotifyMessage   class EmailSender(Notification):     def __init__(self, *, host: str, port: int, user: str, password: str, to_emails: list, from_email: str):         self.host = host         self.port = port         self.user = user         self.password = password         self.to_emails = to_emails         self.from_email = from_email      def name(self) -> str:         return "email"      def send(self, msg: NotifyMessage) -> bool:         try:             mime = MIMEMultipart("alternative")             mime["Subject"] = f"[SignalPulse] {msg.subject}"             mime["From"] = self.from_email             mime["To"] = ", ".join(self.to_emails)             mime.attach(MIMEText(msg.body, "plain", "utf-8"))             with smtplib.SMTP(self.host, self.port, timeout=20) as s:                 s.starttls()                 if self.user and self.password:                     s.login(self.user, self.password)                 s.sendmail(self.from_email, self.to_emails, mime.as_string())             return True         except Exception as exc:  # noqa: BLE001             logger.error("email send failed: {}", exc)             return False   __all__ = ["EmailSender"]
+﻿"""SMTP email notifier."""
+from __future__ import annotations
+
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+from loguru import logger
+
+from signalpulse.notify.base import Notification, NotifyMessage
+
+
+class EmailSender(Notification):
+    def __init__(self, *, host: str, port: int, user: str, password: str, to_emails: list, from_email: str):
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.to_emails = to_emails
+        self.from_email = from_email
+
+    def name(self) -> str:
+        return "email"
+
+    def send(self, msg: NotifyMessage) -> bool:
+        try:
+            mime = MIMEMultipart("alternative")
+            mime["Subject"] = f"[SignalPulse] {msg.subject}"
+            mime["From"] = self.from_email
+            mime["To"] = ", ".join(self.to_emails)
+            mime.attach(MIMEText(msg.body, "plain", "utf-8"))
+            with smtplib.SMTP(self.host, self.port, timeout=20) as s:
+                s.starttls()
+                if self.user and self.password:
+                    s.login(self.user, self.password)
+                s.sendmail(self.from_email, self.to_emails, mime.as_string())
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.error("email send failed: {}", exc)
+            return False
+
+
+__all__ = ["EmailSender"]

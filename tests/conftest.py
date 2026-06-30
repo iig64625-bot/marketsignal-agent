@@ -1,1 +1,104 @@
-"""Shared pytest fixtures."""  from __future__ import annotations  import gc import os import tempfile from pathlib import Path  import pytest  from signalpulse.config.settings import get_settings from signalpulse.db.engine import get_engine from signalpulse.db.session import _get_factory, reset_session_factory   @pytest.fixture def tmp_data_dir():     """Provide a writable temp dir and set ``DATABASE_URL`` to a SQLite file inside it.      The fixture is function-scoped so the temp dir is cleaned up after every     test. It also clears the ``@lru_cache`` on :func:`get_settings` and disposes     any cached SQLAlchemy engines so the SQLite file lock is released before     Windows ``tempfile`` cleanup runs.     """     with tempfile.TemporaryDirectory() as d:         Path(d).mkdir(parents=True, exist_ok=True)         prev_db = os.environ.get("DATABASE_URL")         prev_chroma = os.environ.get("CHROMA_PERSIST_DIR")         os.environ["DATABASE_URL"] = f"sqlite:///{d}/test.db"         os.environ["CHROMA_PERSIST_DIR"] = f"{d}/chroma"         get_settings.cache_clear()         reset_session_factory()         try:             yield d         finally:             # Force release of any cached engine connections             factory = _get_factory()             if factory is not None and factory.kw.get("bind") is not None:                 factory.kw["bind"].dispose()             try:                 get_engine().dispose()             except Exception:                 pass             reset_session_factory()             get_settings.cache_clear()             gc.collect()             if prev_db is None:                 os.environ.pop("DATABASE_URL", None)             else:                 os.environ["DATABASE_URL"] = prev_db             if prev_chroma is None:                 os.environ.pop("CHROMA_PERSIST_DIR", None)             else:                 os.environ["CHROMA_PERSIST_DIR"] = prev_chroma  @pytest.fixture(autouse=True, scope="session") def _ensure_db_tables_once() -> None:     """Create the SQLAlchemy tables once per test session.      Several tests in :mod:`tests.test_chaos` build a pipeline directly via     :func:`build_pipeline` and run it without going through any FastAPI     TestClient fixture. Those tests need the schema to exist. Rather than     create tables per test, we create them once at the start of the session;     the per-test ``tmp_data_dir`` fixture still gives each test a fresh     database file (the ``reset_session_factory`` call inside it ensures the     engine picks up the new URL).     """     # Set a default DB URL if none is set, so the engine can be created.     import os      os.environ.setdefault("DATABASE_URL", "sqlite:///./_test_session.db")     from signalpulse.db.engine import get_engine     from signalpulse.db.session import reset_session_factory     from signalpulse.models.base import Base      reset_session_factory()     Base.metadata.create_all(get_engine())     yield     # Best-effort cleanup; ignore errors so a failure here does not mask     # the real test result.     try:         get_engine().dispose()     except Exception:         pass     try:         Path("./_test_session.db").unlink(missing_ok=True)     except Exception:         pass   @pytest.fixture(autouse=True) def _init_db_tables(tmp_data_dir):     """Create SQLAlchemy tables for every test using tmp_data_dir.      The session-scope ``_ensure_db_tables_once`` only creates tables on the     shared ``_test_session.db`` — once ``tmp_data_dir`` switches the URL to a     fresh temp file, the new DB has no schema. This autouse fixture runs     *after* ``tmp_data_dir`` and creates the schema on whatever DB is now active.     """     from signalpulse.db.engine import get_engine     from signalpulse.models.base import Base     Base.metadata.create_all(get_engine())     yield
+"""Shared pytest fixtures."""
+
+from __future__ import annotations
+
+import gc
+import os
+import tempfile
+from pathlib import Path
+
+import pytest
+
+from signalpulse.config.settings import get_settings
+from signalpulse.db.engine import get_engine
+from signalpulse.db.session import _get_factory, reset_session_factory
+
+
+@pytest.fixture
+def tmp_data_dir():
+    """Provide a writable temp dir and set ``DATABASE_URL`` to a SQLite file inside it.
+
+    The fixture is function-scoped so the temp dir is cleaned up after every
+    test. It also clears the ``@lru_cache`` on :func:`get_settings` and disposes
+    any cached SQLAlchemy engines so the SQLite file lock is released before
+    Windows ``tempfile`` cleanup runs.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        Path(d).mkdir(parents=True, exist_ok=True)
+        prev_db = os.environ.get("DATABASE_URL")
+        prev_chroma = os.environ.get("CHROMA_PERSIST_DIR")
+        os.environ["DATABASE_URL"] = f"sqlite:///{d}/test.db"
+        os.environ["CHROMA_PERSIST_DIR"] = f"{d}/chroma"
+        get_settings.cache_clear()
+        reset_session_factory()
+        try:
+            yield d
+        finally:
+            # Force release of any cached engine connections
+            factory = _get_factory()
+            if factory is not None and factory.kw.get("bind") is not None:
+                factory.kw["bind"].dispose()
+            try:
+                get_engine().dispose()
+            except Exception:
+                pass
+            reset_session_factory()
+            get_settings.cache_clear()
+            gc.collect()
+            if prev_db is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = prev_db
+            if prev_chroma is None:
+                os.environ.pop("CHROMA_PERSIST_DIR", None)
+            else:
+                os.environ["CHROMA_PERSIST_DIR"] = prev_chroma
+
+@pytest.fixture(autouse=True, scope="session")
+def _ensure_db_tables_once() -> None:
+    """Create the SQLAlchemy tables once per test session.
+
+    Several tests in :mod:`tests.test_chaos` build a pipeline directly via
+    :func:`build_pipeline` and run it without going through any FastAPI
+    TestClient fixture. Those tests need the schema to exist. Rather than
+    create tables per test, we create them once at the start of the session;
+    the per-test ``tmp_data_dir`` fixture still gives each test a fresh
+    database file (the ``reset_session_factory`` call inside it ensures the
+    engine picks up the new URL).
+    """
+    # Set a default DB URL if none is set, so the engine can be created.
+    import os
+
+    os.environ.setdefault("DATABASE_URL", "sqlite:///./_test_session.db")
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
+
+    reset_session_factory()
+    Base.metadata.create_all(get_engine())
+    yield
+    # Best-effort cleanup; ignore errors so a failure here does not mask
+    # the real test result.
+    try:
+        get_engine().dispose()
+    except Exception:
+        pass
+    try:
+        Path("./_test_session.db").unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _init_db_tables(tmp_data_dir):
+    """Create SQLAlchemy tables for every test using tmp_data_dir.
+
+    The session-scope ``_ensure_db_tables_once`` only creates tables on the
+    shared ``_test_session.db`` — once ``tmp_data_dir`` switches the URL to a
+    fresh temp file, the new DB has no schema. This autouse fixture runs
+    *after* ``tmp_data_dir`` and creates the schema on whatever DB is now active.
+    """
+    from signalpulse.db.engine import get_engine
+    from signalpulse.models.base import Base
+    Base.metadata.create_all(get_engine())
+    yield

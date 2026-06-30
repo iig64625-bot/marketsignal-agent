@@ -1,1 +1,40 @@
 # Python __pycache__/ *.py[cod] *$py.class *.so .Python .venv/ venv/ env/ *.egg-info/ .pytest_cache/ .ruff_cache/ .coverage htmlcov/  # IDE .vscode/ .idea/ *.swp *.swo  # Project runtime data/raw/ data/normalized/ data/chroma/ data/scheduler/jobs.json data/marketsignal.db data/marketsignal.db-journal data/marketsignal.db-wal data/marketsignal.db-shm *.pid  # Env / secrets .env .env.local .env.*.local  # OS .DS_Store Thumbs.db  # Run artifacts (regenerated on every pipeline run) data/evals/eval_*.json data/reports/battlecard_*.md data/reports/weekly_*.md data/traces/*.json  # Local git config override (contains the GitHub token used by GIT_CONFIG_GLOBAL) .gitconfig.local  # Runtime artifacts data/signalpulse.db data/signalpulse.db-journal data/signalpulse.db-wal data/signalpulse.db-shm run.log  # Backup files *.bak *.bak2 .env.bak  *.bak-*
+
+# === V5 runtime / generated ===
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.bak
+*.bak2
+*.egg-info/
+*.egg
+build/
+dist/
+
+# data/ — 只跟踪 README/seed，runtime 生成的 reports/traces/evals 排除
+data/traces/*.json
+data/reports/*.pdf
+data/reports/*.md
+data/evals/eval_*.json
+data/eval_goldset/last_run.json
+
+# 测试 / 服务运行 log
+logs/
+*.log
+
+# 本地 env / db
+.env
+*.db
+*.sqlite
+*.sqlite3
+.DS_Store
+Thumbs.db
+
+# === 补充 ===
+.venv/
+data/normalized/
+data/raw/
+data/scheduler/
+*.db-journal
+*.bak-pre-v5

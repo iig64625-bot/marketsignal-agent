@@ -1,1 +1,60 @@
-"""Scheduler daemon: loads schedules.yaml and runs the registered cron jobs.  Usage:     python scripts/scheduler_daemon.py  Reads ``schedules.yaml`` from CWD (or the env var ``SCHEDULES_FILE``), re-registers every enabled job with the in-process APScheduler, and sleeps forever.  Ctrl+C shuts down cleanly. """ from __future__ import annotations  import os import sys import time from pathlib import Path  import yaml  # Allow running without `pip install -e .` _HERE = Path(__file__).resolve().parent sys.path.insert(0, str(_HERE.parent / "src"))  from signalpulse.scheduler import add_job, shutdown  # noqa: E402   def main() -> int:     yaml_path = Path(os.environ.get("SCHEDULES_FILE", "schedules.yaml"))     if not yaml_path.exists():         print(f"[daemon] {yaml_path} not found; nothing to schedule")     else:         try:             jobs = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or []         except Exception as exc:  # noqa: BLE001             print(f"[daemon] bad {yaml_path}: {exc}")             return 1         for j in jobs:             if not j.get("enabled", True):                 continue             try:                 add_job(                     name=j["id"],                     cron=j["cron"],                     config_path=j.get("config", "configs/competitors.ai-agent.yaml"),                     use_sample_dataset=j.get("use_sample", True),                 )                 print(f"[daemon] loaded {j['id']} cron={j['cron']}")             except Exception as exc:  # noqa: BLE001                 print(f"[daemon] skip {j.get('id')}: {exc}")     print("[daemon] ready, Ctrl+C to stop")     try:         while True:             time.sleep(60)     except KeyboardInterrupt:         print("[daemon] shutting down...")         shutdown()     return 0   if __name__ == "__main__":     sys.exit(main())
+"""Scheduler daemon: loads schedules.yaml and runs the registered cron jobs.
+
+Usage:
+    python scripts/scheduler_daemon.py
+
+Reads ``schedules.yaml`` from CWD (or the env var ``SCHEDULES_FILE``),
+re-registers every enabled job with the in-process APScheduler, and sleeps
+forever.  Ctrl+C shuts down cleanly.
+"""
+from __future__ import annotations
+
+import os
+import sys
+import time
+from pathlib import Path
+
+import yaml
+
+# Allow running without `pip install -e .`
+_HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(_HERE.parent / "src"))
+
+from signalpulse.scheduler import add_job, shutdown  # noqa: E402
+
+
+def main() -> int:
+    yaml_path = Path(os.environ.get("SCHEDULES_FILE", "schedules.yaml"))
+    if not yaml_path.exists():
+        print(f"[daemon] {yaml_path} not found; nothing to schedule")
+    else:
+        try:
+            jobs = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or []
+        except Exception as exc:  # noqa: BLE001
+            print(f"[daemon] bad {yaml_path}: {exc}")
+            return 1
+        for j in jobs:
+            if not j.get("enabled", True):
+                continue
+            try:
+                add_job(
+                    name=j["id"],
+                    cron=j["cron"],
+                    config_path=j.get("config", "configs/competitors.ai-agent.yaml"),
+                    use_sample_dataset=j.get("use_sample", True),
+                )
+                print(f"[daemon] loaded {j['id']} cron={j['cron']}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[daemon] skip {j.get('id')}: {exc}")
+    print("[daemon] ready, Ctrl+C to stop")
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        print("[daemon] shutting down...")
+        shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

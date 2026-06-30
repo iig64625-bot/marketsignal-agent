@@ -1,1 +1,182 @@
-"""Smoke tests for the FastAPI app and route handlers.""" from __future__ import annotations  from pathlib import Path from unittest.mock import patch  import pytest from fastapi.testclient import TestClient  from signalpulse.api.app import create_app from signalpulse.models.base import new_id from signalpulse.models.crawl_run import CrawlRun from signalpulse.models.report import Report   @pytest.fixture def client(tmp_data_dir: str) -> TestClient:     """Build a TestClient with an isolated SQLite DB."""     import signalpulse.models  # noqa: F401  (register models)     from signalpulse.db.engine import get_engine     from signalpulse.db.session import reset_session_factory     from signalpulse.models.base import Base      reset_session_factory()     Base.metadata.create_all(get_engine())     return TestClient(create_app())   def test_health_returns_ok(client: TestClient) -> None:     """``GET /health`` always returns 200 with status=ok."""     r = client.get("/health")     assert r.status_code == 200     body = r.json()     assert body["status"] == "ok"     assert "version" in body   def test_ready_reports_db_status(client: TestClient) -> None:     """``GET /ready`` reports DB and vector store status."""     r = client.get("/ready")     assert r.status_code == 200     body = r.json()     assert "checks" in body     assert "database" in body["checks"]   def test_list_runs_empty(client: TestClient) -> None:     """``GET /runs`` returns an empty list when no runs exist."""     r = client.get("/runs")     assert r.status_code == 200     assert r.json() == []   def test_list_reports_empty(client: TestClient) -> None:     """``GET /reports`` returns an empty list when no reports exist."""     r = client.get("/reports")     assert r.status_code == 200     assert r.json() == []   def test_get_run_not_found(client: TestClient) -> None:     """``GET /runs/{id}`` returns 404 for unknown ids."""     r = client.get(f"/runs/{new_id()}")     assert r.status_code == 404   def test_get_report_not_found(client: TestClient) -> None:     """``GET /reports/{id}`` returns 404 for unknown ids."""     r = client.get(f"/reports/{new_id()}")     assert r.status_code == 404   def test_create_run_returns_202_and_persists(client: TestClient) -> None:     """``POST /runs`` returns 202 and creates a pending :class:`CrawlRun` row."""     with patch("signalpulse.api.routes.runs._execute_pipeline_async") as task:         r = client.post(             "/runs",             json={"config_path": "configs/competitors.ai-agent.yaml", "use_sample_dataset": True},         )     assert r.status_code == 202, r.text     body = r.json()     assert body["status"] == "pending"     assert body["triggered_by"] == "api"     # Background task was scheduled (we mocked it to avoid running real LLM).     assert task.called   def test_get_run_after_create(client: TestClient) -> None:     """``GET /runs/{id}`` returns the run created by ``POST /runs``."""     with patch("signalpulse.api.routes.runs._execute_pipeline_async"):         created = client.post("/runs", json={"use_sample_dataset": True}).json()     r = client.get(f"/runs/{created['id']}")     assert r.status_code == 200     assert r.json()["id"] == created["id"]   def test_list_reports_filters_by_type(client: TestClient) -> None:     import datetime as _dt     """``GET /reports?report_type=weekly`` filters by type."""     from signalpulse.db.session import get_session      with get_session() as s:         run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")         s.add(run)         s.flush()         s.add(             Report(                 id=new_id(),                 crawl_run_id=run.id,                 report_type="weekly",                 title="Weekly",                 markdown_path=None,             )         )         s.add(             Report(                 id=new_id(),                 crawl_run_id=run.id,                 report_type="battlecard",                 title="Battlecard",                 markdown_path=None,             )         )     r = client.get("/reports", params={"report_type": "weekly"})     assert r.status_code == 200     body = r.json()     assert len(body) == 1     assert body[0]["report_type"] == "weekly"   def test_report_markdown_endpoint(tmp_data_dir: str, client: TestClient) -> None:     """``GET /reports/{id}/markdown`` returns the raw markdown body."""     import datetime as _dt      from signalpulse.db.session import get_session      md_path = Path(tmp_data_dir) / "test_report.md"     md_path.write_text("# Hello\n", encoding="utf-8")     with get_session() as s:         run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")         s.add(run)         s.flush()         report = Report(             id=new_id(),             crawl_run_id=run.id,             report_type="weekly",             title="T",             markdown_path=str(md_path),         )         s.add(report)         s.flush()         rid = report.id     r = client.get(f"/reports/{rid}/markdown")     assert r.status_code == 200     assert "Hello" in r.text   def test_report_download_returns_file(tmp_data_dir: str, client: TestClient) -> None:     """``GET /reports/{id}/download`` streams the file with a filename header."""     import datetime as _dt      from signalpulse.db.session import get_session      md_path = Path(tmp_data_dir) / "dl.md"     md_path.write_text("body", encoding="utf-8")     with get_session() as s:         run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")         s.add(run)         s.flush()         r = Report(id=new_id(), crawl_run_id=run.id, report_type="weekly", title="T", markdown_path=str(md_path))         s.add(r)         s.flush()         rid = r.id     resp = client.get(f"/reports/{rid}/download")     assert resp.status_code == 200     assert "attachment" in resp.headers.get("content-disposition", "").lower() or "dl.md" in resp.headers.get("content-disposition", "")   def test_health_endpoint_no_db(client: TestClient) -> None:     """``GET /health`` must not depend on the database (liveness != readiness)."""     r = client.get("/health")     assert r.status_code == 200
+﻿"""Smoke tests for the FastAPI app and route handlers."""
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from signalpulse.api.app import create_app
+from signalpulse.models.base import new_id
+from signalpulse.models.crawl_run import CrawlRun
+from signalpulse.models.report import Report
+
+
+@pytest.fixture
+def client(tmp_data_dir: str) -> TestClient:
+    """Build a TestClient with an isolated SQLite DB."""
+    import signalpulse.models  # noqa: F401  (register models)
+    from signalpulse.db.engine import get_engine
+    from signalpulse.db.session import reset_session_factory
+    from signalpulse.models.base import Base
+
+    reset_session_factory()
+    Base.metadata.create_all(get_engine())
+    return TestClient(create_app())
+
+
+def test_health_returns_ok(client: TestClient) -> None:
+    """``GET /health`` always returns 200 with status=ok."""
+    r = client.get("/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "version" in body
+
+
+def test_ready_reports_db_status(client: TestClient) -> None:
+    """``GET /ready`` reports DB and vector store status."""
+    r = client.get("/ready")
+    assert r.status_code == 200
+    body = r.json()
+    assert "checks" in body
+    assert "database" in body["checks"]
+
+
+def test_list_runs_empty(client: TestClient) -> None:
+    """``GET /runs`` returns an empty list when no runs exist."""
+    r = client.get("/runs")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_list_reports_empty(client: TestClient) -> None:
+    """``GET /reports`` returns an empty list when no reports exist."""
+    r = client.get("/reports")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_get_run_not_found(client: TestClient) -> None:
+    """``GET /runs/{id}`` returns 404 for unknown ids."""
+    r = client.get(f"/runs/{new_id()}")
+    assert r.status_code == 404
+
+
+def test_get_report_not_found(client: TestClient) -> None:
+    """``GET /reports/{id}`` returns 404 for unknown ids."""
+    r = client.get(f"/reports/{new_id()}")
+    assert r.status_code == 404
+
+
+def test_create_run_returns_202_and_persists(client: TestClient) -> None:
+    """``POST /runs`` returns 202 and creates a pending :class:`CrawlRun` row."""
+    with patch("signalpulse.api.routes.runs._execute_pipeline_async") as task:
+        r = client.post(
+            "/runs",
+            json={"config_path": "configs/competitors.ai-agent.yaml", "use_sample_dataset": True},
+        )
+    assert r.status_code == 202, r.text
+    body = r.json()
+    assert body["status"] == "pending"
+    assert body["triggered_by"] == "api"
+    # Background task was scheduled (we mocked it to avoid running real LLM).
+    assert task.called
+
+
+def test_get_run_after_create(client: TestClient) -> None:
+    """``GET /runs/{id}`` returns the run created by ``POST /runs``."""
+    with patch("signalpulse.api.routes.runs._execute_pipeline_async"):
+        created = client.post("/runs", json={"use_sample_dataset": True}).json()
+    r = client.get(f"/runs/{created['id']}")
+    assert r.status_code == 200
+    assert r.json()["id"] == created["id"]
+
+
+def test_list_reports_filters_by_type(client: TestClient) -> None:
+    import datetime as _dt
+    """``GET /reports?report_type=weekly`` filters by type."""
+    from signalpulse.db.session import get_session
+
+    with get_session() as s:
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
+        s.add(run)
+        s.flush()
+        s.add(
+            Report(
+                id=new_id(),
+                crawl_run_id=run.id,
+                report_type="weekly",
+                title="Weekly",
+                markdown_path=None,
+            )
+        )
+        s.add(
+            Report(
+                id=new_id(),
+                crawl_run_id=run.id,
+                report_type="battlecard",
+                title="Battlecard",
+                markdown_path=None,
+            )
+        )
+    r = client.get("/reports", params={"report_type": "weekly"})
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["report_type"] == "weekly"
+
+
+def test_report_markdown_endpoint(tmp_data_dir: str, client: TestClient) -> None:
+    """``GET /reports/{id}/markdown`` returns the raw markdown body."""
+    import datetime as _dt
+
+    from signalpulse.db.session import get_session
+
+    md_path = Path(tmp_data_dir) / "test_report.md"
+    md_path.write_text("# Hello\n", encoding="utf-8")
+    with get_session() as s:
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
+        s.add(run)
+        s.flush()
+        report = Report(
+            id=new_id(),
+            crawl_run_id=run.id,
+            report_type="weekly",
+            title="T",
+            markdown_path=str(md_path),
+        )
+        s.add(report)
+        s.flush()
+        rid = report.id
+    r = client.get(f"/reports/{rid}/markdown")
+    assert r.status_code == 200
+    assert "Hello" in r.text
+
+
+def test_report_download_returns_file(tmp_data_dir: str, client: TestClient) -> None:
+    """``GET /reports/{id}/download`` streams the file with a filename header."""
+    import datetime as _dt
+
+    from signalpulse.db.session import get_session
+
+    md_path = Path(tmp_data_dir) / "dl.md"
+    md_path.write_text("body", encoding="utf-8")
+    with get_session() as s:
+        run = CrawlRun(id=new_id(), started_at=_dt.datetime.now(_dt.timezone.utc), status="completed", triggered_by="test")
+        s.add(run)
+        s.flush()
+        r = Report(id=new_id(), crawl_run_id=run.id, report_type="weekly", title="T", markdown_path=str(md_path))
+        s.add(r)
+        s.flush()
+        rid = r.id
+    resp = client.get(f"/reports/{rid}/download")
+    assert resp.status_code == 200
+    assert "attachment" in resp.headers.get("content-disposition", "").lower() or "dl.md" in resp.headers.get("content-disposition", "")
+
+
+def test_health_endpoint_no_db(client: TestClient) -> None:
+    """``GET /health`` must not depend on the database (liveness != readiness)."""
+    r = client.get("/health")
+    assert r.status_code == 200

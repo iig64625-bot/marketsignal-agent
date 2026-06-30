@@ -1,1 +1,137 @@
-"""Provider-agnostic LLM wrapper (returns a LangChain chat model).""" from __future__ import annotations  from typing import Any  from langchain_anthropic import ChatAnthropic from langchain_core.callbacks import BaseCallbackHandler, Callbacks from langchain_core.language_models import BaseChatModel from langchain_openai import ChatOpenAI  from signalpulse.config.settings import get_settings from signalpulse.utils.llm_cost import add_usage, reset as reset_cost   class _CostCallback(BaseCallbackHandler):     """Track LLM token usage for cost estimation."""      def on_llm_end(self, response, **kwargs):         for gens in response.generations:             for g in gens:                 message = getattr(g, "message", None)                 usage = (getattr(message, "usage_metadata", None) or {}) if message is not None else {}                 llm_output = getattr(response, "llm_output", None) or {}                 model = llm_output.get("model_name") or llm_output.get("model") or "unknown"                 add_usage(model, int(usage.get("input_tokens", 0) or 0), int(usage.get("output_tokens", 0) or 0))   def _merged_callbacks(extra: Callbacks | None) -> list:     """Always include the cost tracker; append any user-provided callbacks."""     cbs: list = [_CostCallback()]     if not extra:         return cbs     if isinstance(extra, list):         cbs.extend(extra)     else:         cbs.append(extra)     return cbs   def get_llm(     *,     temperature: float = 0.2,     model: str | None = None,     provider: str | None = None,     **kwargs: Any, ) -> BaseChatModel:     settings = get_settings()     chosen_provider = (provider or settings.llm_provider).lower()     chosen_model = model or settings.llm_model      user_callbacks = kwargs.pop("callbacks", None)     callbacks = _merged_callbacks(user_callbacks)      if chosen_provider == "openai":         if not settings.openai_api_key:             raise ValueError("OPENAI_API_KEY is not set; cannot use the openai provider")         openai_kwargs: dict = {             "model": chosen_model,             "temperature": temperature,             "api_key": settings.openai_api_key,             "callbacks": callbacks,         }         if settings.llm_base_url:             openai_kwargs["base_url"] = settings.llm_base_url         return ChatOpenAI(**openai_kwargs, **kwargs)     if chosen_provider == "anthropic":         if not settings.anthropic_api_key:             raise ValueError("ANTHROPIC_API_KEY is not set; cannot use the anthropic provider")         return ChatAnthropic(             model=chosen_model,             temperature=temperature,             api_key=settings.anthropic_api_key,             callbacks=callbacks,             **kwargs,         )     if chosen_provider == "deepseek":         if not settings.deepseek_api_key:             raise ValueError("DEEPSEEK_API_KEY is not set; cannot use the deepseek provider")         return ChatOpenAI(             model=chosen_model,             temperature=temperature,             api_key=settings.deepseek_api_key,             base_url=settings.deepseek_base_url,             callbacks=callbacks,             **kwargs,         )     if chosen_provider == "gemini":         if not settings.gemini_api_key:             raise ValueError("GEMINI_API_KEY is not set; cannot use the gemini provider")         try:             from langchain_google_genai import ChatGoogleGenerativeAI         except ImportError as exc:             raise ValueError(                 "gemini provider requires langchain-google-genai; install with `pip install langchain-google-genai`"             ) from exc         return ChatGoogleGenerativeAI(             model=chosen_model,             temperature=temperature,             google_api_key=settings.gemini_api_key,             callbacks=callbacks,             **kwargs,         )     if chosen_provider == "qwen":         if not settings.qwen_api_key:             raise ValueError("QWEN_API_KEY is not set; cannot use the qwen provider")         return ChatOpenAI(             model=chosen_model,             temperature=temperature,             api_key=settings.qwen_api_key,             base_url=settings.qwen_base_url,             callbacks=callbacks,             **kwargs,         )     if chosen_provider == "ollama":         return ChatOpenAI(             model=chosen_model,             temperature=temperature,             api_key=settings.ollama_api_key or "ollama",             base_url=settings.ollama_base_url,             callbacks=callbacks,             **kwargs,         )     if chosen_provider == "custom":         if not settings.llm_base_url:             raise ValueError("LLM_BASE_URL must be set for the custom provider")         return ChatOpenAI(             model=chosen_model,             temperature=temperature,             api_key=settings.llm_api_key or settings.openai_api_key,             base_url=settings.llm_base_url,             callbacks=callbacks,             **kwargs,         )     raise ValueError(f"unknown LLM provider: {chosen_provider!r}")   __all__ = ["get_llm", "reset_cost"]
+"""Provider-agnostic LLM wrapper (returns a LangChain chat model)."""
+from __future__ import annotations
+
+from typing import Any
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.callbacks import BaseCallbackHandler, Callbacks
+from langchain_core.language_models import BaseChatModel
+from langchain_openai import ChatOpenAI
+
+from signalpulse.config.settings import get_settings
+from signalpulse.utils.llm_cost import add_usage, reset as reset_cost
+
+
+class _CostCallback(BaseCallbackHandler):
+    """Track LLM token usage for cost estimation."""
+
+    def on_llm_end(self, response, **kwargs):
+        for gens in response.generations:
+            for g in gens:
+                message = getattr(g, "message", None)
+                usage = (getattr(message, "usage_metadata", None) or {}) if message is not None else {}
+                llm_output = getattr(response, "llm_output", None) or {}
+                model = llm_output.get("model_name") or llm_output.get("model") or "unknown"
+                add_usage(model, int(usage.get("input_tokens", 0) or 0), int(usage.get("output_tokens", 0) or 0))
+
+
+def _merged_callbacks(extra: Callbacks | None) -> list:
+    """Always include the cost tracker; append any user-provided callbacks."""
+    cbs: list = [_CostCallback()]
+    if not extra:
+        return cbs
+    if isinstance(extra, list):
+        cbs.extend(extra)
+    else:
+        cbs.append(extra)
+    return cbs
+
+
+def get_llm(
+    *,
+    temperature: float = 0.2,
+    model: str | None = None,
+    provider: str | None = None,
+    **kwargs: Any,
+) -> BaseChatModel:
+    settings = get_settings()
+    chosen_provider = (provider or settings.llm_provider).lower()
+    chosen_model = model or settings.llm_model
+
+    user_callbacks = kwargs.pop("callbacks", None)
+    callbacks = _merged_callbacks(user_callbacks)
+
+    if chosen_provider == "openai":
+        if not settings.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is not set; cannot use the openai provider")
+        openai_kwargs: dict = {
+            "model": chosen_model,
+            "temperature": temperature,
+            "api_key": settings.openai_api_key,
+            "callbacks": callbacks,
+        }
+        if settings.llm_base_url:
+            openai_kwargs["base_url"] = settings.llm_base_url
+        return ChatOpenAI(**openai_kwargs, **kwargs)
+    if chosen_provider == "anthropic":
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is not set; cannot use the anthropic provider")
+        return ChatAnthropic(
+            model=chosen_model,
+            temperature=temperature,
+            api_key=settings.anthropic_api_key,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    if chosen_provider == "deepseek":
+        if not settings.deepseek_api_key:
+            raise ValueError("DEEPSEEK_API_KEY is not set; cannot use the deepseek provider")
+        return ChatOpenAI(
+            model=chosen_model,
+            temperature=temperature,
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    if chosen_provider == "gemini":
+        if not settings.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not set; cannot use the gemini provider")
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+        except ImportError as exc:
+            raise ValueError(
+                "gemini provider requires langchain-google-genai; install with `pip install langchain-google-genai`"
+            ) from exc
+        return ChatGoogleGenerativeAI(
+            model=chosen_model,
+            temperature=temperature,
+            google_api_key=settings.gemini_api_key,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    if chosen_provider == "qwen":
+        if not settings.qwen_api_key:
+            raise ValueError("QWEN_API_KEY is not set; cannot use the qwen provider")
+        return ChatOpenAI(
+            model=chosen_model,
+            temperature=temperature,
+            api_key=settings.qwen_api_key,
+            base_url=settings.qwen_base_url,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    if chosen_provider == "ollama":
+        return ChatOpenAI(
+            model=chosen_model,
+            temperature=temperature,
+            api_key=settings.ollama_api_key or "ollama",
+            base_url=settings.ollama_base_url,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    if chosen_provider == "custom":
+        if not settings.llm_base_url:
+            raise ValueError("LLM_BASE_URL must be set for the custom provider")
+        return ChatOpenAI(
+            model=chosen_model,
+            temperature=temperature,
+            api_key=settings.llm_api_key or settings.openai_api_key,
+            base_url=settings.llm_base_url,
+            callbacks=callbacks,
+            **kwargs,
+        )
+    raise ValueError(f"unknown LLM provider: {chosen_provider!r}")
+
+
+__all__ = ["get_llm", "reset_cost"]

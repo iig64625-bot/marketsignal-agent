@@ -1,1 +1,77 @@
-"""Tests for signalpulse.ui.components.scheduling (UI side).""" from __future__ import annotations  from pathlib import Path  import pytest  # croniter is an optional dep (only needed for the [schedule] feature) pytest.importorskip("croniter", reason="croniter not installed; pip install croniter")  import yaml  # noqa: E402  (after importorskip)  from signalpulse.ui.components.scheduling import _load, _next_run, _save  # noqa: E402   # ---- _load / _save round-trip ----  def test_load_returns_empty_when_file_missing(tmp_path, monkeypatch):     """No schedules.yaml -> []."""     monkeypatch.chdir(tmp_path)     assert _load() == []   def test_save_then_load(tmp_path, monkeypatch):     """Round-trip: save jobs, load them back identically."""     monkeypatch.chdir(tmp_path)     jobs = [         {"id": "job-a", "cron": "0 9 * * 1", "config": "competitors.ai-agent.yaml",          "use_sample": True, "enabled": True, "created_at": "2026-01-01T00:00:00", "last_run": None},         {"id": "job-b", "cron": "*/30 * * * *", "config": "competitors.ai-coding.yaml",          "use_sample": False, "enabled": True, "created_at": "2026-01-02T00:00:00", "last_run": "2026-01-02T12:00:00"},     ]     _save(jobs)     assert Path("schedules.yaml").exists()     loaded = _load()     assert len(loaded) == 2     assert loaded[0]["id"] == "job-a"     assert loaded[1]["cron"] == "*/30 * * * *"   def test_save_overwrites_existing(tmp_path, monkeypatch):     """Second _save call replaces the file (not append)."""     monkeypatch.chdir(tmp_path)     _save([{"id": "v1", "cron": "0 0 * * *"}])     _save([{"id": "v2", "cron": "0 9 * * 1"}, {"id": "v3", "cron": "0 18 * * 5"}])     loaded = _load()     assert len(loaded) == 2     assert {j["id"] for j in loaded} == {"v2", "v3"}   def test_load_handles_malformed_yaml(tmp_path, monkeypatch):     """A corrupt schedules.yaml should not raise, return [] instead."""     monkeypatch.chdir(tmp_path)     Path("schedules.yaml").write_text("this is not [valid yaml: !!", encoding="utf-8")     assert _load() == []   # ---- _next_run (with croniter) ----  def test_next_run_with_valid_cron():     """A valid cron expression returns a non-empty timestamp (not '-')."""     out = _next_run("0 9 * * 1")     assert out != "-"     assert len(out) > 5   def test_next_run_with_invalid_cron():     """Invalid cron -> '-' (graceful fallback)."""     out = _next_run("not a cron")     assert out == "-"   def test_next_run_every_minute():     """* * * * * should produce a valid timestamp, not the fallback."""     out = _next_run("* * * * *")     assert out != "-"     assert len(out) >= 16
+"""Tests for signalpulse.ui.components.scheduling (UI side)."""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+# croniter is an optional dep (only needed for the [schedule] feature)
+pytest.importorskip("croniter", reason="croniter not installed; pip install croniter")
+
+import yaml  # noqa: E402  (after importorskip)
+
+from signalpulse.ui.components.scheduling import _load, _next_run, _save  # noqa: E402
+
+
+# ---- _load / _save round-trip ----
+
+def test_load_returns_empty_when_file_missing(tmp_path, monkeypatch):
+    """No schedules.yaml -> []."""
+    monkeypatch.chdir(tmp_path)
+    assert _load() == []
+
+
+def test_save_then_load(tmp_path, monkeypatch):
+    """Round-trip: save jobs, load them back identically."""
+    monkeypatch.chdir(tmp_path)
+    jobs = [
+        {"id": "job-a", "cron": "0 9 * * 1", "config": "competitors.ai-agent.yaml",
+         "use_sample": True, "enabled": True, "created_at": "2026-01-01T00:00:00", "last_run": None},
+        {"id": "job-b", "cron": "*/30 * * * *", "config": "competitors.ai-coding.yaml",
+         "use_sample": False, "enabled": True, "created_at": "2026-01-02T00:00:00", "last_run": "2026-01-02T12:00:00"},
+    ]
+    _save(jobs)
+    assert Path("schedules.yaml").exists()
+    loaded = _load()
+    assert len(loaded) == 2
+    assert loaded[0]["id"] == "job-a"
+    assert loaded[1]["cron"] == "*/30 * * * *"
+
+
+def test_save_overwrites_existing(tmp_path, monkeypatch):
+    """Second _save call replaces the file (not append)."""
+    monkeypatch.chdir(tmp_path)
+    _save([{"id": "v1", "cron": "0 0 * * *"}])
+    _save([{"id": "v2", "cron": "0 9 * * 1"}, {"id": "v3", "cron": "0 18 * * 5"}])
+    loaded = _load()
+    assert len(loaded) == 2
+    assert {j["id"] for j in loaded} == {"v2", "v3"}
+
+
+def test_load_handles_malformed_yaml(tmp_path, monkeypatch):
+    """A corrupt schedules.yaml should not raise, return [] instead."""
+    monkeypatch.chdir(tmp_path)
+    Path("schedules.yaml").write_text("this is not [valid yaml: !!", encoding="utf-8")
+    assert _load() == []
+
+
+# ---- _next_run (with croniter) ----
+
+def test_next_run_with_valid_cron():
+    """A valid cron expression returns a non-empty timestamp (not '-')."""
+    out = _next_run("0 9 * * 1")
+    assert out != "-"
+    assert len(out) > 5
+
+
+def test_next_run_with_invalid_cron():
+    """Invalid cron -> '-' (graceful fallback)."""
+    out = _next_run("not a cron")
+    assert out == "-"
+
+
+def test_next_run_every_minute():
+    """* * * * * should produce a valid timestamp, not the fallback."""
+    out = _next_run("* * * * *")
+    assert out != "-"
+    assert len(out) >= 16

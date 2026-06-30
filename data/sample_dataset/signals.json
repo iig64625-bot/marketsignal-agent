@@ -1,1 +1,83 @@
-[   {     "company_name": "Coze",     "signal_type": "product",     "finding": "Coze is investing heavily in workflow automation, matching where enterprise buyers want to consolidate tooling.",     "analysis": "Workflow Templates lowers the activation bar for non-technical builders, expanding the addressable market beyond the existing developer base.",     "recommendation": "Dify should prioritise a comparable template gallery and consider co-marketing with workflow-specific system integrators.",     "confidence": "high",     "source_event_indices": [0]   },   {     "company_name": "Coze",     "signal_type": "pricing",     "finding": "Coze moved to a per-seat model that resembles the classic SaaS playbook and signals confidence in team expansion.",     "analysis": "Per-seat pricing improves land-and-expand dynamics and is easier for procurement teams to evaluate than usage-based alternatives.",     "recommendation": "Dify should publish a TCO comparison versus Coze for a 50-seat team to pre-empt pricing objections in active deals.",     "confidence": "high",     "source_event_indices": [1]   },   {     "company_name": "Coze",     "signal_type": "hiring",     "finding": "Coze is hiring a VP of Engineering for its agent platform, indicating a step-change in platform investment.",     "analysis": "VP-level hire typically precedes a major roadmap acceleration and signals ByteDance's continued commitment to Coze outside China.",     "recommendation": "Watch the new VP's first 90 days of public appearances and roadmap announcements to anticipate where Coze will compete most aggressively.",     "confidence": "medium",     "source_event_indices": [2]   },   {     "company_name": "Coze",     "signal_type": "gtm",     "finding": "Coze launched native CRM connectors (Salesforce / HubSpot / Zoho), enabling direct integration into existing revenue stacks.",     "analysis": "This collapses the time-to-value for sales and RevOps buyers and shortens Coze's evaluation cycle in mid-market accounts.",     "recommendation": "Dify should ship at least one of these connectors or partner with a system integrator to provide equivalent coverage within the next quarter.",     "confidence": "high",     "source_event_indices": [3]   },   {     "company_name": "Coze",     "signal_type": "product",     "finding": "ByteDance open-sourced the coze repository under Apache 2.0, accepting community contributions.",     "analysis": "Open-sourcing is a community-building and developer-mindshare move, not necessarily a revenue move, but it pressures closed competitors on transparency.",     "recommendation": "Audit the open-source release for enterprise-incompatible licensing terms (e.g. trademark / patent grants) and turn any gap into a Dify positioning point.",     "confidence": "medium",     "source_event_indices": [4]   },   {     "company_name": "FastGPT",     "signal_type": "product",     "finding": "FastGPT added multi-modal RAG, an area Dify has not yet addressed with first-class support.",     "analysis": "Multi-modal retrieval is increasingly requested by enterprise buyers with image- and audio-heavy knowledge bases; the gap may show up in competitive deals.",     "recommendation": "Open a Dify roadmap item for native image and audio ingestion in the next two quarters and pre-announce at the next community event.",     "confidence": "high",     "source_event_indices": [5]   },   {     "company_name": "FastGPT",     "signal_type": "product",     "finding": "FastGPT 4.7 ships a visual DAG editor, narrowing the gap with Coze's workflow templates.",     "analysis": "Visual DAG editors dramatically improve builder productivity; both Coze and FastGPT now have stronger no-code offerings than Dify.",     "recommendation": "Prioritise the visual workflow editor in the Dify roadmap and benchmark it against both competitors before demoing to prospects.",     "confidence": "high",     "source_event_indices": [6]   },   {     "company_name": "FastGPT",     "signal_type": "risk",     "finding": "FastGPT has not yet published SOC2 documentation, which blocks deals with regulated buyers.",     "analysis": "This is a short-term weakness but a near-term disqualifier for healthcare, financial services and EU public-sector prospects.",     "recommendation": "Dify should highlight SOC2 Type II coverage in sales conversations with regulated buyers and offer to share the audit report under NDA.",     "confidence": "high",     "source_event_indices": [7]   },   {     "company_name": "FastGPT",     "signal_type": "risk",     "finding": "Users report degraded accuracy on FastGPT above ~60k context tokens.",     "analysis": "Long-context accuracy regressions create churn risk in accounts with large knowledge bases and shift buyer attention to retrieval quality instead of model size.",     "recommendation": "Dify should publish benchmarks on long-context accuracy and re-ranking to convert this weakness into a sales conversation.",     "confidence": "medium",     "source_event_indices": [8]   } ]
+[
+  {
+    "company_name": "Coze",
+    "signal_type": "product",
+    "finding": "Coze is investing heavily in workflow automation, matching where enterprise buyers want to consolidate tooling.",
+    "analysis": "Workflow Templates lowers the activation bar for non-technical builders, expanding the addressable market beyond the existing developer base.",
+    "recommendation": "Dify should prioritise a comparable template gallery and consider co-marketing with workflow-specific system integrators.",
+    "confidence": "high",
+    "source_event_indices": [0]
+  },
+  {
+    "company_name": "Coze",
+    "signal_type": "pricing",
+    "finding": "Coze moved to a per-seat model that resembles the classic SaaS playbook and signals confidence in team expansion.",
+    "analysis": "Per-seat pricing improves land-and-expand dynamics and is easier for procurement teams to evaluate than usage-based alternatives.",
+    "recommendation": "Dify should publish a TCO comparison versus Coze for a 50-seat team to pre-empt pricing objections in active deals.",
+    "confidence": "high",
+    "source_event_indices": [1]
+  },
+  {
+    "company_name": "Coze",
+    "signal_type": "hiring",
+    "finding": "Coze is hiring a VP of Engineering for its agent platform, indicating a step-change in platform investment.",
+    "analysis": "VP-level hire typically precedes a major roadmap acceleration and signals ByteDance's continued commitment to Coze outside China.",
+    "recommendation": "Watch the new VP's first 90 days of public appearances and roadmap announcements to anticipate where Coze will compete most aggressively.",
+    "confidence": "medium",
+    "source_event_indices": [2]
+  },
+  {
+    "company_name": "Coze",
+    "signal_type": "gtm",
+    "finding": "Coze launched native CRM connectors (Salesforce / HubSpot / Zoho), enabling direct integration into existing revenue stacks.",
+    "analysis": "This collapses the time-to-value for sales and RevOps buyers and shortens Coze's evaluation cycle in mid-market accounts.",
+    "recommendation": "Dify should ship at least one of these connectors or partner with a system integrator to provide equivalent coverage within the next quarter.",
+    "confidence": "high",
+    "source_event_indices": [3]
+  },
+  {
+    "company_name": "Coze",
+    "signal_type": "product",
+    "finding": "ByteDance open-sourced the coze repository under Apache 2.0, accepting community contributions.",
+    "analysis": "Open-sourcing is a community-building and developer-mindshare move, not necessarily a revenue move, but it pressures closed competitors on transparency.",
+    "recommendation": "Audit the open-source release for enterprise-incompatible licensing terms (e.g. trademark / patent grants) and turn any gap into a Dify positioning point.",
+    "confidence": "medium",
+    "source_event_indices": [4]
+  },
+  {
+    "company_name": "FastGPT",
+    "signal_type": "product",
+    "finding": "FastGPT added multi-modal RAG, an area Dify has not yet addressed with first-class support.",
+    "analysis": "Multi-modal retrieval is increasingly requested by enterprise buyers with image- and audio-heavy knowledge bases; the gap may show up in competitive deals.",
+    "recommendation": "Open a Dify roadmap item for native image and audio ingestion in the next two quarters and pre-announce at the next community event.",
+    "confidence": "high",
+    "source_event_indices": [5]
+  },
+  {
+    "company_name": "FastGPT",
+    "signal_type": "product",
+    "finding": "FastGPT 4.7 ships a visual DAG editor, narrowing the gap with Coze's workflow templates.",
+    "analysis": "Visual DAG editors dramatically improve builder productivity; both Coze and FastGPT now have stronger no-code offerings than Dify.",
+    "recommendation": "Prioritise the visual workflow editor in the Dify roadmap and benchmark it against both competitors before demoing to prospects.",
+    "confidence": "high",
+    "source_event_indices": [6]
+  },
+  {
+    "company_name": "FastGPT",
+    "signal_type": "risk",
+    "finding": "FastGPT has not yet published SOC2 documentation, which blocks deals with regulated buyers.",
+    "analysis": "This is a short-term weakness but a near-term disqualifier for healthcare, financial services and EU public-sector prospects.",
+    "recommendation": "Dify should highlight SOC2 Type II coverage in sales conversations with regulated buyers and offer to share the audit report under NDA.",
+    "confidence": "high",
+    "source_event_indices": [7]
+  },
+  {
+    "company_name": "FastGPT",
+    "signal_type": "risk",
+    "finding": "Users report degraded accuracy on FastGPT above ~60k context tokens.",
+    "analysis": "Long-context accuracy regressions create churn risk in accounts with large knowledge bases and shift buyer attention to retrieval quality instead of model size.",
+    "recommendation": "Dify should publish benchmarks on long-context accuracy and re-ranking to convert this weakness into a sales conversation.",
+    "confidence": "medium",
+    "source_event_indices": [8]
+  }
+]

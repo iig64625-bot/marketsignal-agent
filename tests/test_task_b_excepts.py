@@ -1,1 +1,43 @@
-"""Tests for Task B: bare except:pass should be gone from the 5 named sites.""" from __future__ import annotations  import re from pathlib import Path  SRC = Path(__file__).resolve().parents[1] / "src"  SITES = [     ("signalpulse/normalization/content_extractor.py", "language = \"en\""),     ("signalpulse/rag/vector_store.py", "delete_collection"),     ("signalpulse/scheduler.py", "remove_job"),     ("signalpulse/reporting/render_pdf.py", "Helvetica"), ]   def test_no_bare_except_pass_in_5_sites() -> None:     """None of the 5 named sites should have `except Exception: pass` anymore."""     pattern = re.compile(r"^\s*except\s+Exception[^:]*:\s*pass\s*$", re.MULTILINE)     for relpath, marker in SITES:         text = (SRC / relpath).read_text(encoding="utf-8")         # Find the relevant block first         idx = text.find(marker)         assert idx >= 0, f"marker {marker!r} not found in {relpath}"         # Look at the 30 lines above the marker         start = text.rfind("def ", 0, idx)         if start < 0:             start = max(0, idx - 600)         block = text[start:idx + 200]         matches = pattern.findall(block)         assert not matches, f"{relpath}: still has bare `except: pass` -> {matches}"   def test_existing_broad_db_safety_nets_are_preserved() -> None:     """The intentional broad except in db/session.py and api/routes/ws.py     (used for transaction rollback / WebSocket boundary) must be left alone.     """     db_text = (SRC / "signalpulse/db/session.py").read_text(encoding="utf-8")     assert "except Exception:" in db_text, "db/session.py should still have the broad except for rollback"      ws_text = (SRC / "signalpulse/api/routes/ws.py").read_text(encoding="utf-8")     # The WebSocket error boundary also has bare except Exception: pass for cleanup     assert ws_text.count("except Exception:") >= 1
+"""Tests for Task B: bare except:pass should be gone from the 5 named sites."""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+SRC = Path(__file__).resolve().parents[1] / "src"
+
+SITES = [
+    ("signalpulse/normalization/content_extractor.py", "language = \"en\""),
+    ("signalpulse/rag/vector_store.py", "delete_collection"),
+    ("signalpulse/scheduler.py", "remove_job"),
+    ("signalpulse/reporting/render_pdf.py", "Helvetica"),
+]
+
+
+def test_no_bare_except_pass_in_5_sites() -> None:
+    """None of the 5 named sites should have `except Exception: pass` anymore."""
+    pattern = re.compile(r"^\s*except\s+Exception[^:]*:\s*pass\s*$", re.MULTILINE)
+    for relpath, marker in SITES:
+        text = (SRC / relpath).read_text(encoding="utf-8")
+        # Find the relevant block first
+        idx = text.find(marker)
+        assert idx >= 0, f"marker {marker!r} not found in {relpath}"
+        # Look at the 30 lines above the marker
+        start = text.rfind("def ", 0, idx)
+        if start < 0:
+            start = max(0, idx - 600)
+        block = text[start:idx + 200]
+        matches = pattern.findall(block)
+        assert not matches, f"{relpath}: still has bare `except: pass` -> {matches}"
+
+
+def test_existing_broad_db_safety_nets_are_preserved() -> None:
+    """The intentional broad except in db/session.py and api/routes/ws.py
+    (used for transaction rollback / WebSocket boundary) must be left alone.
+    """
+    db_text = (SRC / "signalpulse/db/session.py").read_text(encoding="utf-8")
+    assert "except Exception:" in db_text, "db/session.py should still have the broad except for rollback"
+
+    ws_text = (SRC / "signalpulse/api/routes/ws.py").read_text(encoding="utf-8")
+    # The WebSocket error boundary also has bare except Exception: pass for cleanup
+    assert ws_text.count("except Exception:") >= 1

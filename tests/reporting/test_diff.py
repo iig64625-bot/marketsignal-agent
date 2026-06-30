@@ -1,1 +1,142 @@
-"""Tests for signalpulse.reporting.diff.""" from __future__ import annotations  from datetime import datetime from unittest.mock import MagicMock, patch  import pytest  from signalpulse.db.session import get_session from signalpulse.models import Company, CrawlRun from signalpulse.reporting.diff import (     RunDiff,     _claim_texts_for_run,     _company_names,     _per_company_signal_counts,     compute_diff,     list_recent_runs, )   # ---- compute_diff: mock internal _per_company_signal_counts + _claim_texts_for_run ---- # (compute_diff itself queries DB via get_session; we mock its 2 helpers to # avoid that and focus on the diff math.)  def test_compute_diff_empty_when_no_data():     """If both runs have no signals/claims, deltas are 0 and lists are empty."""     fake_run = MagicMock(spec=CrawlRun)     fake_run.started_at = datetime.now()     fake_run.status = "completed"     fake_session = MagicMock()     fake_session.get.return_value = fake_run     with patch("signalpulse.reporting.diff.get_session") as gs:         gs.return_value.__enter__.return_value = fake_session         with patch("signalpulse.reporting.diff._per_company_signal_counts", return_value={}):             with patch("signalpulse.reporting.diff._claim_texts_for_run", return_value=[]):                 diff = compute_diff("a", "b")     assert isinstance(diff, RunDiff)     assert diff.signals_a == 0     assert diff.signals_b == 0     assert diff.claims_a == 0     assert diff.claims_b == 0     assert diff.delta_signals == 0     assert diff.delta_claims == 0     assert diff.new_claims == []     assert diff.removed_claims == []   def test_compute_diff_only_side_b():     """All B signals are new, A signals are 0; new_claims populated."""     fake_run = MagicMock(spec=CrawlRun)     fake_run.started_at = datetime.now()     fake_run.status = "completed"     fake_session = MagicMock()     fake_session.get.return_value = fake_run     with patch("signalpulse.reporting.diff.get_session") as gs:         gs.return_value.__enter__.return_value = fake_session         with patch("signalpulse.reporting.diff._per_company_signal_counts", side_effect=[             {},  # A             {"Coze": 3, "FastGPT": 2},  # B         ]):             with patch("signalpulse.reporting.diff._claim_texts_for_run", side_effect=[                 [],                 ["c1", "c2", "c3", "c4", "c5"],             ]):                 diff = compute_diff("a", "b")     assert diff.signals_a == 0     assert diff.signals_b == 5     assert diff.delta_signals == 5     assert diff.claims_b == 5     assert len(diff.new_claims) == 5     assert diff.per_company_a == {}     assert diff.per_company_b == {"Coze": 3, "FastGPT": 2}   def test_compute_diff_both_sides():     """Deltas computed, new/removed claims derived from set difference."""     fake_run = MagicMock(spec=CrawlRun)     fake_run.started_at = datetime.now()     fake_run.status = "completed"     fake_session = MagicMock()     fake_session.get.return_value = fake_run     with patch("signalpulse.reporting.diff.get_session") as gs:         gs.return_value.__enter__.return_value = fake_session         with patch("signalpulse.reporting.diff._per_company_signal_counts", side_effect=[             {"Coze": 2, "FastGPT": 1},  # A             {"Coze": 3, "FastGPT": 1, "Dify": 1},  # B         ]):             with patch("signalpulse.reporting.diff._claim_texts_for_run", side_effect=[                 ["shared_claim", "old_claim"],                 ["shared_claim", "brand_new"],             ]):                 diff = compute_diff("a", "b")     assert diff.signals_a == 3     assert diff.signals_b == 5     assert diff.delta_signals == 2     assert "brand_new" in diff.new_claims     assert "old_claim" in diff.removed_claims     assert "shared_claim" not in diff.new_claims     assert "shared_claim" not in diff.removed_claims   # ---- list_recent_runs ----  def test_list_recent_runs_default_returns_list():     """Default call returns a list (possibly empty)."""     runs = list_recent_runs()     assert isinstance(runs, list)   def test_list_recent_runs_respects_limit():     """Custom limit is honored."""     runs = list_recent_runs(limit=3)     assert len(runs) <= 3   # ---- internal helpers (DB-touching, use tmp_data_dir + autouse _init_db_tables) ----  def test_company_names_returns_dict():     """_company_names returns {id: name} dict; empty on fresh DB."""     out = _company_names()     assert isinstance(out, dict)   def test_company_names_with_one_company():     """Insert a company, _company_names returns it."""     with get_session() as s:         s.add(Company(name="MyTestCoDiff", website="https://test.example.com"))         s.commit()     out = _company_names()     assert "MyTestCoDiff" in out.values()   def test_per_company_signal_counts_empty_run():     """Returns {} when run has no signals."""     out = _per_company_signal_counts("nonexistent-run-id-xxxx")     assert out == {}   def test_claim_texts_for_run_empty():     """Returns [] for a run with no claims."""     out = _claim_texts_for_run("nonexistent-run-id-xxxx")     assert out == []
+"""Tests for signalpulse.reporting.diff."""
+from __future__ import annotations
+
+from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from signalpulse.db.session import get_session
+from signalpulse.models import Company, CrawlRun
+from signalpulse.reporting.diff import (
+    RunDiff,
+    _claim_texts_for_run,
+    _company_names,
+    _per_company_signal_counts,
+    compute_diff,
+    list_recent_runs,
+)
+
+
+# ---- compute_diff: mock internal _per_company_signal_counts + _claim_texts_for_run ----
+# (compute_diff itself queries DB via get_session; we mock its 2 helpers to
+# avoid that and focus on the diff math.)
+
+def test_compute_diff_empty_when_no_data():
+    """If both runs have no signals/claims, deltas are 0 and lists are empty."""
+    fake_run = MagicMock(spec=CrawlRun)
+    fake_run.started_at = datetime.now()
+    fake_run.status = "completed"
+    fake_session = MagicMock()
+    fake_session.get.return_value = fake_run
+    with patch("signalpulse.reporting.diff.get_session") as gs:
+        gs.return_value.__enter__.return_value = fake_session
+        with patch("signalpulse.reporting.diff._per_company_signal_counts", return_value={}):
+            with patch("signalpulse.reporting.diff._claim_texts_for_run", return_value=[]):
+                diff = compute_diff("a", "b")
+    assert isinstance(diff, RunDiff)
+    assert diff.signals_a == 0
+    assert diff.signals_b == 0
+    assert diff.claims_a == 0
+    assert diff.claims_b == 0
+    assert diff.delta_signals == 0
+    assert diff.delta_claims == 0
+    assert diff.new_claims == []
+    assert diff.removed_claims == []
+
+
+def test_compute_diff_only_side_b():
+    """All B signals are new, A signals are 0; new_claims populated."""
+    fake_run = MagicMock(spec=CrawlRun)
+    fake_run.started_at = datetime.now()
+    fake_run.status = "completed"
+    fake_session = MagicMock()
+    fake_session.get.return_value = fake_run
+    with patch("signalpulse.reporting.diff.get_session") as gs:
+        gs.return_value.__enter__.return_value = fake_session
+        with patch("signalpulse.reporting.diff._per_company_signal_counts", side_effect=[
+            {},  # A
+            {"Coze": 3, "FastGPT": 2},  # B
+        ]):
+            with patch("signalpulse.reporting.diff._claim_texts_for_run", side_effect=[
+                [],
+                ["c1", "c2", "c3", "c4", "c5"],
+            ]):
+                diff = compute_diff("a", "b")
+    assert diff.signals_a == 0
+    assert diff.signals_b == 5
+    assert diff.delta_signals == 5
+    assert diff.claims_b == 5
+    assert len(diff.new_claims) == 5
+    assert diff.per_company_a == {}
+    assert diff.per_company_b == {"Coze": 3, "FastGPT": 2}
+
+
+def test_compute_diff_both_sides():
+    """Deltas computed, new/removed claims derived from set difference."""
+    fake_run = MagicMock(spec=CrawlRun)
+    fake_run.started_at = datetime.now()
+    fake_run.status = "completed"
+    fake_session = MagicMock()
+    fake_session.get.return_value = fake_run
+    with patch("signalpulse.reporting.diff.get_session") as gs:
+        gs.return_value.__enter__.return_value = fake_session
+        with patch("signalpulse.reporting.diff._per_company_signal_counts", side_effect=[
+            {"Coze": 2, "FastGPT": 1},  # A
+            {"Coze": 3, "FastGPT": 1, "Dify": 1},  # B
+        ]):
+            with patch("signalpulse.reporting.diff._claim_texts_for_run", side_effect=[
+                ["shared_claim", "old_claim"],
+                ["shared_claim", "brand_new"],
+            ]):
+                diff = compute_diff("a", "b")
+    assert diff.signals_a == 3
+    assert diff.signals_b == 5
+    assert diff.delta_signals == 2
+    assert "brand_new" in diff.new_claims
+    assert "old_claim" in diff.removed_claims
+    assert "shared_claim" not in diff.new_claims
+    assert "shared_claim" not in diff.removed_claims
+
+
+# ---- list_recent_runs ----
+
+def test_list_recent_runs_default_returns_list():
+    """Default call returns a list (possibly empty)."""
+    runs = list_recent_runs()
+    assert isinstance(runs, list)
+
+
+def test_list_recent_runs_respects_limit():
+    """Custom limit is honored."""
+    runs = list_recent_runs(limit=3)
+    assert len(runs) <= 3
+
+
+# ---- internal helpers (DB-touching, use tmp_data_dir + autouse _init_db_tables) ----
+
+def test_company_names_returns_dict():
+    """_company_names returns {id: name} dict; empty on fresh DB."""
+    out = _company_names()
+    assert isinstance(out, dict)
+
+
+def test_company_names_with_one_company():
+    """Insert a company, _company_names returns it."""
+    with get_session() as s:
+        s.add(Company(name="MyTestCoDiff", website="https://test.example.com"))
+        s.commit()
+    out = _company_names()
+    assert "MyTestCoDiff" in out.values()
+
+
+def test_per_company_signal_counts_empty_run():
+    """Returns {} when run has no signals."""
+    out = _per_company_signal_counts("nonexistent-run-id-xxxx")
+    assert out == {}
+
+
+def test_claim_texts_for_run_empty():
+    """Returns [] for a run with no claims."""
+    out = _claim_texts_for_run("nonexistent-run-id-xxxx")
+    assert out == []

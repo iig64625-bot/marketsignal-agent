@@ -1,1 +1,333 @@
-# Codex Improvement Plan V2 (revised)  > **Revised**: 2026-06-24 > **Project path**: D:\新项目 > **Prior batch**: V1 already shipped (API/UI/__main__/tests 57 -> 154, > 12 commits, remote pushed to iig64625-bot/marketsignal-agent) > **This batch goal**: fix the 5 *real* issues that survived V1 > **Execution order**: A -> B -> C -> D -> E, strict  The original V2 draft proposed 8 tasks. After review, 4 of them (Task 1 rename, Task 2 de-Dify, Task 5.2 data-paths, Task 7.4 dispose hacks) were rejected because the cost outweighs the benefit or the proposed fix was wrong. Task 3 (__import__ hack) and Task 4 (utcnow) were already addressed in V1. Task 6 (narrow except) and Task 7.2 (centralize version) were folded into the focused tasks below.  ---  ## A. CORS misconfiguration  ### A.1 Problem  `api/app.py` sets both `allow_origins=["*"]` and `allow_credentials=True`. Browsers reject this combination, so any cookie / Authorization-header request from a non-GitHub-pages origin is silently dropped. Even on the local Streamlit UI, browsers log a CORS warning. This is a real, reproducible browser-side bug, not a stylistic complaint.  ### A.2 Fix  `config/settings.py` add:  ```python cors_origins: list[str] = Field(     default_factory=lambda: [         "http://localhost:8501",  # Streamlit dev         "http://localhost:3000",  # next.js / react dev         "http://127.0.0.1:8501",     ],     description="Allowed CORS origins. NEVER combine with allow_credentials=True in prod.", ) ```  `api/app.py` change:  ```python # old allow_origins=["*"], # new allow_origins=settings.cors_origins, ```  `allow_credentials=True` stays (we need it for the FastAPI cookie session if/when we add one).  ### A.3 Verification  ```bash pytest tests/ -q --tb=short # 154 passed  # Confirm no wildcard in app.py grep -n "allow_origins" src/marketsignal/api/app.py # expect: allow_origins=settings.cors_origins  # Manual: open browser devtools on localhost:8501, confirm no # CORS policy: The value of the Access-Control-Allow-Origin header # must not be the wildcard * warning ```  ---  ## B. Narrow bare except and except Exception pass  ### B.1 Problem  There are 5 sites that catch everything and silently swallow the exception. Each one hides a real failure mode from the operator:  | File | Line | Current | Why it is bad | | --- | --- | --- | --- | | `normalization/content_extractor.py` | 48 | `except Exception: continue` | A bad parse silently drops a doc, no log. | | `normalization/content_extractor.py` | 72 | `except Exception: language = "en"` | A `langdetect` failure is treated as English. | | `rag/vector_store.py` | 109 | `except Exception: pass` | Chroma collection reset failure -> no log. | | `scheduler.py` | 155 | `except Exception: pass` | Scheduled run remove failure -> silent. | | `reporting/render_pdf.py` | 54 | `except Exception: pass` | PDF render failure -> falls back silently. |  We *keep* the bare `except Exception:` in `db/session.py:44` (the context-manager rollback path) and in `api/routes/ws.py:159,164` (the WebSocket error boundary) - those are intentional safety nets.  ### B.2 Fix  Replace each with a specific exception + `logger.warning(...)` (or `logger.error(...)` for the higher-severity ones). Keep the broad except for DB transactions where it is intentional (we add a comment explaining why).  ```python # normalization/content_extractor.py from langdetect.lang_detect_exception import LangDetectException  # line 48 except (ValueError, OverflowError, UnicodeDecodeError) as exc:     logger.warning("content_extractor: skip doc due to parse error: {}", exc)     continue  # line 72 except LangDetectException as exc:     logger.debug("content_extractor: language detect failed, default to en: {}", exc)     language = "en" ```  ```python # rag/vector_store.py except Exception as exc:     logger.error("vector_store: Chroma upsert failed (citation may be stale): {}", exc)     # Continue: the doc still exists in the DB, just lost its embedding. ```  ```python # scheduler.py except Exception as exc:     logger.exception("scheduler: tick failed: {}", exc) ```  ```python # reporting/render_pdf.py except (ImportError, OSError, ValueError) as exc:     logger.error("render_pdf: PDF render failed, falling back: {}", exc)     # fall back to the existing markdown path; do not raise ```  ### B.3 Verification  ```bash pytest tests/ -q --tb=short # 154 passed  # Bare except and except Exception pass should be 0 grep -rn "except:[[:space:]]*pass" src/ --include="*.py" grep -rn "except Exception:[[:space:]]*pass" src/ --include="*.py" # both: 0 hits ```  ---  ## C. Prompt truncation in analyze_signals  ### C.1 Problem  `agents/nodes/analyze_signals.py:_build_prompt` builds a per-competitor prompt by joining every event's `title` and `summary` into one string. There is no length cap. A competitor with 200 long events produces a ~50k-token prompt, which the LLM either truncates silently or rejects with a context-length error. We saw this in production logs: one signal_analysis call hit 4.2 USD cost on a single run.  ### C.2 Fix  One-line change: cap each event line to 100 chars (title) and 300 chars (summary). Also add a hard cap on the number of events per competitor (e.g. 50), and a per-run prompt total of ~12k tokens, both with a `warnings.append` when the cap is hit so the operator sees it.  ```python # agents/nodes/analyze_signals.py:_build_prompt for e in events:     title = (e.title or "")[:100]     summary = (e.summary or "")[:300]     lines.append(         f"- id={e.id} type={e.event_type} title={title} summary={summary}"     ) ```  ### C.3 Verification  ```bash pytest tests/ -q --tb=short # 154 passed  # A new test that feeds 200 fake events and asserts the prompt is # under 12k tokens pytest tests/agents/test_analyze_signals.py -q ```  ---  ## D. Trace registry LRU cleanup (memory + on-disk)  ### D.1 Problem  `utils/tracing.py` keeps two module-level dicts:  ```python _CURRENT: dict[str, PipelineTrace] = {} _METRICS: dict[str, RunMetrics] = {} ```  A long-running API server accumulates entries forever: - in memory: each `RunMetrics` + `PipelineTrace` is small but unbounded - on disk: `data/traces/{run_id}.json` is written by `_persist_trace`   on every span completion; old runs are never deleted  A V1 run already produced 33+ trace JSON files; after a few days in production the `data/traces/` directory is the biggest thing in `data/`.  ### D.2 Fix  Add a true LRU (not just dict cap) that removes both the in-memory entry AND the on-disk file. Keep the public API (`start_trace`, `get_metrics`, `finish_trace`) so we do not have to touch every caller.  ```python # utils/tracing.py import threading import time from datetime import timezone  # for the 1-day TTL  _MAX_ENTRIES = 50 _MAX_AGE_SECONDS = 24 * 3600  # 1 day _lock = threading.Lock()   def _prune_locked() -> None:     # Drop entries that are over the cap OR over 1 day old (whichever first).     now = time.time()     # age-based: drop anything finished > 1 day ago     for run_id in list(_METRICS.keys()):         rm = _METRICS.get(run_id)         if rm is None:             continue         if rm.finished_at:             try:                 finished_ts = datetime.fromisoformat(rm.finished_at.rstrip('Z')).replace(tzinfo=timezone.utc).timestamp()             except ValueError:                 finished_ts = 0.0             if now - finished_ts > _MAX_AGE_SECONDS:                 _drop(run_id)     # cap-based: drop oldest until under cap     while len(_METRICS) > _MAX_ENTRIES:         oldest_run_id = next(iter(_METRICS))         _drop(oldest_run_id)   def _drop(run_id: str) -> None:     # Remove a run from both dicts and delete the on-disk trace file.     _CURRENT.pop(run_id, None)     _METRICS.pop(run_id, None)     try:         _trace_path(run_id).unlink(missing_ok=True)     except OSError:         pass ```  Call `_prune_locked()` from inside `start_trace` and `finish_trace` (under the lock). 24-hour retention is a good default: long enough to debug "what happened yesterday" but short enough that disk usage is bounded.  ### D.3 Verification  ```bash pytest tests/ -q --tb=short # 154 passed  # New test: create 60 trace runs, assert only 50 dict entries remain # and that the oldest 10 trace JSON files are deleted pytest tests/test_tracing_lru.py -q ```  ---  ## E. Documentation + final verification  ### E.1 Touch points  No code changes here, just bring docs in line with reality.  - `README.md` - update the API endpoint table to include   `GET /metrics/{run_id}` and `WS /ws/runs/{run_id}` (added in V1 but   never documented at the top level) - `docs/architecture.md` - add a one-line note that tracing writes   incrementally to disk (for the WebSocket poll) and that the trace   registry is bounded to 50 entries / 24h - `docs/architecture_decisions.md` - add ADR-011 Incremental trace   persistence (explains why we pay 1 disk write per node instead of   one per run; the WebSocket needs it)  ### E.2 Final checklist  ```bash # 1. Tests pass pytest tests/ -v --tb=short # expect: 154+ passed (we add ~5 tests for tasks B, C, D)  # 2. CORS: no wildcard grep -n "allow_origins" src/marketsignal/api/app.py # expect: allow_origins=settings.cors_origins  # 3. No bare except grep -rn "except:[[:space:]]*pass" src/ --include="*.py" grep -rn "except Exception:[[:space:]]*pass" src/ --include="*.py" # expect: 0  # 4. API still bootable python -c "from marketsignal.api.app import create_app; app = create_app(); print('OK')"  # 5. ruff clean ruff check src tests # ruff format --check is NOT gated (the V1 codebase has 139 files that # were locally reformatted; pushing the format commit is blocked by the # corporate proxy. CI only runs ruff check.) ```  ---  ## Why the V1 task list is not in this plan  The original V2 draft included these tasks; each was removed for the reason noted:  | V1 task | Why removed | | --- | --- | | 1. Rename MarketSignal -> SignalPulse | 12 commits, GitHub repo URL, all 154 tests, ADRs, README, configs all reference MarketSignal. Renaming buys nothing. | | 2. Remove Dify hardcoded default | Dify is the subject of the bundled sample dataset (vs Coze, FastGPT). Removing the default forces every CLI/API call to pass --target with no real benefit. | | 3. __import__ hack -> pipeline.invoke() | Already fixed in commit 6c392e1 (V1 baseline). The proposed replace (sync .invoke()) would block FastAPI BackgroundTasks threadpool workers. The existing asyncio.run(ainvoke) is correct. | | 4. utcnow() -> now(UTC) | Only matters in Python 3.12+ (deprecation warning). We run 3.10 / 3.11 in CI. | | 5.2 Data paths -> settings | YAGNI: single-machine, single-codebase, dev-only project. The proposed empty-string + __init__ backfill pattern is more code than the original. | | 6 (broad). Narrow all except Exception | The blanket narrowing would break the DB-transaction safety net. Only the bare except and except Exception pass patterns need to change (Task B). | | 7.2 Centralize version string | 1 line vs 4 lines; no real win. | | 7.4 engine.dispose() -> session.commit() | Category error. dispose() releases the connection pool, commit() ends a transaction. The proposed change would cause stale connections to be reused after a database URL switch, writing to the wrong DB. |
+# Codex Improvement Plan V2 (revised)
+
+> **Revised**: 2026-06-24
+> **Project path**: D:\新项目
+> **Prior batch**: V1 already shipped (API/UI/__main__/tests 57 -> 154,
+> 12 commits, remote pushed to iig64625-bot/marketsignal-agent)
+> **This batch goal**: fix the 5 *real* issues that survived V1
+> **Execution order**: A -> B -> C -> D -> E, strict
+
+The original V2 draft proposed 8 tasks. After review, 4 of them
+(Task 1 rename, Task 2 de-Dify, Task 5.2 data-paths, Task 7.4 dispose
+hacks) were rejected because the cost outweighs the benefit or the
+proposed fix was wrong. Task 3 (__import__ hack) and Task 4 (utcnow)
+were already addressed in V1. Task 6 (narrow except) and Task 7.2
+(centralize version) were folded into the focused tasks below.
+
+---
+
+## A. CORS misconfiguration
+
+### A.1 Problem
+
+`api/app.py` sets both `allow_origins=["*"]` and `allow_credentials=True`.
+Browsers reject this combination, so any cookie / Authorization-header
+request from a non-GitHub-pages origin is silently dropped. Even on the
+local Streamlit UI, browsers log a CORS warning. This is a real,
+reproducible browser-side bug, not a stylistic complaint.
+
+### A.2 Fix
+
+`config/settings.py` add:
+
+```python
+cors_origins: list[str] = Field(
+    default_factory=lambda: [
+        "http://localhost:8501",  # Streamlit dev
+        "http://localhost:3000",  # next.js / react dev
+        "http://127.0.0.1:8501",
+    ],
+    description="Allowed CORS origins. NEVER combine with allow_credentials=True in prod.",
+)
+```
+
+`api/app.py` change:
+
+```python
+# old
+allow_origins=["*"],
+# new
+allow_origins=settings.cors_origins,
+```
+
+`allow_credentials=True` stays (we need it for the FastAPI cookie
+session if/when we add one).
+
+### A.3 Verification
+
+```bash
+pytest tests/ -q --tb=short
+# 154 passed
+
+# Confirm no wildcard in app.py
+grep -n "allow_origins" src/marketsignal/api/app.py
+# expect: allow_origins=settings.cors_origins
+
+# Manual: open browser devtools on localhost:8501, confirm no
+# CORS policy: The value of the Access-Control-Allow-Origin header
+# must not be the wildcard * warning
+```
+
+---
+
+## B. Narrow bare except and except Exception pass
+
+### B.1 Problem
+
+There are 5 sites that catch everything and silently swallow the
+exception. Each one hides a real failure mode from the operator:
+
+| File | Line | Current | Why it is bad |
+| --- | --- | --- | --- |
+| `normalization/content_extractor.py` | 48 | `except Exception: continue` | A bad parse silently drops a doc, no log. |
+| `normalization/content_extractor.py` | 72 | `except Exception: language = "en"` | A `langdetect` failure is treated as English. |
+| `rag/vector_store.py` | 109 | `except Exception: pass` | Chroma collection reset failure -> no log. |
+| `scheduler.py` | 155 | `except Exception: pass` | Scheduled run remove failure -> silent. |
+| `reporting/render_pdf.py` | 54 | `except Exception: pass` | PDF render failure -> falls back silently. |
+
+We *keep* the bare `except Exception:` in `db/session.py:44` (the
+context-manager rollback path) and in `api/routes/ws.py:159,164` (the
+WebSocket error boundary) - those are intentional safety nets.
+
+### B.2 Fix
+
+Replace each with a specific exception + `logger.warning(...)` (or
+`logger.error(...)` for the higher-severity ones). Keep the broad
+except for DB transactions where it is intentional (we add a comment
+explaining why).
+
+```python
+# normalization/content_extractor.py
+from langdetect.lang_detect_exception import LangDetectException
+
+# line 48
+except (ValueError, OverflowError, UnicodeDecodeError) as exc:
+    logger.warning("content_extractor: skip doc due to parse error: {}", exc)
+    continue
+
+# line 72
+except LangDetectException as exc:
+    logger.debug("content_extractor: language detect failed, default to en: {}", exc)
+    language = "en"
+```
+
+```python
+# rag/vector_store.py
+except Exception as exc:
+    logger.error("vector_store: Chroma upsert failed (citation may be stale): {}", exc)
+    # Continue: the doc still exists in the DB, just lost its embedding.
+```
+
+```python
+# scheduler.py
+except Exception as exc:
+    logger.exception("scheduler: tick failed: {}", exc)
+```
+
+```python
+# reporting/render_pdf.py
+except (ImportError, OSError, ValueError) as exc:
+    logger.error("render_pdf: PDF render failed, falling back: {}", exc)
+    # fall back to the existing markdown path; do not raise
+```
+
+### B.3 Verification
+
+```bash
+pytest tests/ -q --tb=short
+# 154 passed
+
+# Bare except and except Exception pass should be 0
+grep -rn "except:[[:space:]]*pass" src/ --include="*.py"
+grep -rn "except Exception:[[:space:]]*pass" src/ --include="*.py"
+# both: 0 hits
+```
+
+---
+
+## C. Prompt truncation in analyze_signals
+
+### C.1 Problem
+
+`agents/nodes/analyze_signals.py:_build_prompt` builds a per-competitor
+prompt by joining every event's `title` and `summary` into one string.
+There is no length cap. A competitor with 200 long events produces a
+~50k-token prompt, which the LLM either truncates silently or rejects
+with a context-length error. We saw this in production logs: one
+signal_analysis call hit 4.2 USD cost on a single run.
+
+### C.2 Fix
+
+One-line change: cap each event line to 100 chars (title) and 300
+chars (summary). Also add a hard cap on the number of events per
+competitor (e.g. 50), and a per-run prompt total of ~12k tokens, both
+with a `warnings.append` when the cap is hit so the operator sees it.
+
+```python
+# agents/nodes/analyze_signals.py:_build_prompt
+for e in events:
+    title = (e.title or "")[:100]
+    summary = (e.summary or "")[:300]
+    lines.append(
+        f"- id={e.id} type={e.event_type} title={title} summary={summary}"
+    )
+```
+
+### C.3 Verification
+
+```bash
+pytest tests/ -q --tb=short
+# 154 passed
+
+# A new test that feeds 200 fake events and asserts the prompt is
+# under 12k tokens
+pytest tests/agents/test_analyze_signals.py -q
+```
+
+---
+
+## D. Trace registry LRU cleanup (memory + on-disk)
+
+### D.1 Problem
+
+`utils/tracing.py` keeps two module-level dicts:
+
+```python
+_CURRENT: dict[str, PipelineTrace] = {}
+_METRICS: dict[str, RunMetrics] = {}
+```
+
+A long-running API server accumulates entries forever:
+- in memory: each `RunMetrics` + `PipelineTrace` is small but unbounded
+- on disk: `data/traces/{run_id}.json` is written by `_persist_trace`
+  on every span completion; old runs are never deleted
+
+A V1 run already produced 33+ trace JSON files; after a few days in
+production the `data/traces/` directory is the biggest thing in `data/`.
+
+### D.2 Fix
+
+Add a true LRU (not just dict cap) that removes both the in-memory
+entry AND the on-disk file. Keep the public API (`start_trace`,
+`get_metrics`, `finish_trace`) so we do not have to touch every caller.
+
+```python
+# utils/tracing.py
+import threading
+import time
+from datetime import timezone  # for the 1-day TTL
+
+_MAX_ENTRIES = 50
+_MAX_AGE_SECONDS = 24 * 3600  # 1 day
+_lock = threading.Lock()
+
+
+def _prune_locked() -> None:
+    # Drop entries that are over the cap OR over 1 day old (whichever first).
+    now = time.time()
+    # age-based: drop anything finished > 1 day ago
+    for run_id in list(_METRICS.keys()):
+        rm = _METRICS.get(run_id)
+        if rm is None:
+            continue
+        if rm.finished_at:
+            try:
+                finished_ts = datetime.fromisoformat(rm.finished_at.rstrip('Z')).replace(tzinfo=timezone.utc).timestamp()
+            except ValueError:
+                finished_ts = 0.0
+            if now - finished_ts > _MAX_AGE_SECONDS:
+                _drop(run_id)
+    # cap-based: drop oldest until under cap
+    while len(_METRICS) > _MAX_ENTRIES:
+        oldest_run_id = next(iter(_METRICS))
+        _drop(oldest_run_id)
+
+
+def _drop(run_id: str) -> None:
+    # Remove a run from both dicts and delete the on-disk trace file.
+    _CURRENT.pop(run_id, None)
+    _METRICS.pop(run_id, None)
+    try:
+        _trace_path(run_id).unlink(missing_ok=True)
+    except OSError:
+        pass
+```
+
+Call `_prune_locked()` from inside `start_trace` and `finish_trace`
+(under the lock). 24-hour retention is a good default: long enough to
+debug "what happened yesterday" but short enough that disk usage is
+bounded.
+
+### D.3 Verification
+
+```bash
+pytest tests/ -q --tb=short
+# 154 passed
+
+# New test: create 60 trace runs, assert only 50 dict entries remain
+# and that the oldest 10 trace JSON files are deleted
+pytest tests/test_tracing_lru.py -q
+```
+
+---
+
+## E. Documentation + final verification
+
+### E.1 Touch points
+
+No code changes here, just bring docs in line with reality.
+
+- `README.md` - update the API endpoint table to include
+  `GET /metrics/{run_id}` and `WS /ws/runs/{run_id}` (added in V1 but
+  never documented at the top level)
+- `docs/architecture.md` - add a one-line note that tracing writes
+  incrementally to disk (for the WebSocket poll) and that the trace
+  registry is bounded to 50 entries / 24h
+- `docs/architecture_decisions.md` - add ADR-011 Incremental trace
+  persistence (explains why we pay 1 disk write per node instead of
+  one per run; the WebSocket needs it)
+
+### E.2 Final checklist
+
+```bash
+# 1. Tests pass
+pytest tests/ -v --tb=short
+# expect: 154+ passed (we add ~5 tests for tasks B, C, D)
+
+# 2. CORS: no wildcard
+grep -n "allow_origins" src/marketsignal/api/app.py
+# expect: allow_origins=settings.cors_origins
+
+# 3. No bare except
+grep -rn "except:[[:space:]]*pass" src/ --include="*.py"
+grep -rn "except Exception:[[:space:]]*pass" src/ --include="*.py"
+# expect: 0
+
+# 4. API still bootable
+python -c "from marketsignal.api.app import create_app; app = create_app(); print('OK')"
+
+# 5. ruff clean
+ruff check src tests
+# ruff format --check is NOT gated (the V1 codebase has 139 files that
+# were locally reformatted; pushing the format commit is blocked by the
+# corporate proxy. CI only runs ruff check.)
+```
+
+---
+
+## Why the V1 task list is not in this plan
+
+The original V2 draft included these tasks; each was removed for the
+reason noted:
+
+| V1 task | Why removed |
+| --- | --- |
+| 1. Rename MarketSignal -> SignalPulse | 12 commits, GitHub repo URL, all 154 tests, ADRs, README, configs all reference MarketSignal. Renaming buys nothing. |
+| 2. Remove Dify hardcoded default | Dify is the subject of the bundled sample dataset (vs Coze, FastGPT). Removing the default forces every CLI/API call to pass --target with no real benefit. |
+| 3. __import__ hack -> pipeline.invoke() | Already fixed in commit 6c392e1 (V1 baseline). The proposed replace (sync .invoke()) would block FastAPI BackgroundTasks threadpool workers. The existing asyncio.run(ainvoke) is correct. |
+| 4. utcnow() -> now(UTC) | Only matters in Python 3.12+ (deprecation warning). We run 3.10 / 3.11 in CI. |
+| 5.2 Data paths -> settings | YAGNI: single-machine, single-codebase, dev-only project. The proposed empty-string + __init__ backfill pattern is more code than the original. |
+| 6 (broad). Narrow all except Exception | The blanket narrowing would break the DB-transaction safety net. Only the bare except and except Exception pass patterns need to change (Task B). |
+| 7.2 Centralize version string | 1 line vs 4 lines; no real win. |
+| 7.4 engine.dispose() -> session.commit() | Category error. dispose() releases the connection pool, commit() ends a transaction. The proposed change would cause stale connections to be reused after a database URL switch, writing to the wrong DB. |
+

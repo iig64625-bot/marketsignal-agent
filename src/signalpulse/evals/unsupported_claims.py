@@ -1,1 +1,11 @@
-"""Unsupported-claim rate: fraction of claims that lack support.""" from __future__ import annotations  from signalpulse.models.claim import Claim   def unsupported_claim_rate(claims: list[Claim]) -> float:     if not claims:         return 0.0     unsupported = sum(1 for c in claims if not c.is_supported)     return unsupported / len(claims)
+﻿"""Unsupported-claim rate: fraction of claims that lack support."""
+from __future__ import annotations
+
+from signalpulse.models.claim import Claim
+
+
+def unsupported_claim_rate(claims: list[Claim]) -> float:
+    if not claims:
+        return 0.0
+    unsupported = sum(1 for c in claims if not c.is_supported)
+    return unsupported / len(claims)

@@ -1,1 +1,97 @@
-"""Competitor overview v1: one card per competitor.""" from __future__ import annotations  from datetime import datetime, timedelta, timezone  import streamlit as st  try:     import plotly.express as px  # type: ignore     HAS_PLOTLY = True except ImportError:  # noqa: BLE001     px = None  # type: ignore     HAS_PLOTLY = False from sqlalchemy import desc, func, select  from signalpulse.db.session import get_session from signalpulse.models import Company, CrawlRun, Signal from signalpulse.ui.i18n import t   def _companies_with_stats() -> list[dict]:     week_ago = datetime.now(timezone.utc) - timedelta(days=7)     with get_session() as s:         companies = list(s.execute(select(Company).order_by(Company.name)).scalars().all())         out = []         for c in companies:             week_n = s.execute(                 select(func.count(Signal.id))                 .where(Signal.company_id == c.id)                 .where(Signal.created_at >= week_ago)             ).scalar() or 0             latest = s.execute(                 select(Signal)                 .where(Signal.company_id == c.id)                 .order_by(desc(Signal.created_at))                 .limit(1)             ).scalars().first()             type_rows = s.execute(                 select(Signal.signal_type, func.count(Signal.id))                 .where(Signal.company_id == c.id)                 .group_by(Signal.signal_type)             ).all()             out.append({                 "name": c.name,                 "week_signals": int(week_n),                 "latest_finding": latest.finding if latest else None,                 "latest_type": latest.signal_type if latest else None,                 "latest_at": latest.created_at if latest else None,                 "type_mix": [(sig_type or "unknown", int(n)) for sig_type, n in type_rows],             })         return out   def render_competitor_overview() -> None:     st.subheader(t("competitor_overview"))     st.caption(t("overview_caption"))      cards = _companies_with_stats()     if not cards:         st.info(t("no_data_yet"))         return      # 2 columns grid     n = len(cards)     cols_per_row = 2     for i in range(0, n, cols_per_row):         row = cards[i:i + cols_per_row]         cols = st.columns(cols_per_row)         for col, comp in zip(cols, row, strict=False):             with col:                 with st.container(border=True):                     st.markdown(f"### 🏢 {comp['name']}")                     st.metric(t("overview_signals"), comp["week_signals"])                     if comp["latest_finding"]:                         ts = comp["latest_at"].strftime("%m-%d %H:%M") if comp["latest_at"] else "?"                         st.markdown(                             f"**{t('overview_latest')}** ({comp['latest_type']} · {ts})  \n"                             f"{comp['latest_finding'][:140]}"                         )                     else:                         st.caption(t("overview_no_data"))                     if comp["type_mix"]:                         import pandas as pd                         df = pd.DataFrame(comp["type_mix"], columns=["type", "count"])                         if HAS_PLOTLY:                             fig = px.pie(df, names="type", values="count", hole=0.5)                             fig.update_layout(                                 template="plotly_dark", height=180,                                 margin=dict(l=0, r=0, t=0, b=0), showlegend=True,                             )                             st.plotly_chart(fig, width="stretch",                                             key=f"ov-pie-{comp['name']}")                         else:                             st.bar_chart(df, x="type", y="count", height=180)   __all__ = ["render_competitor_overview"]
+"""Competitor overview v1: one card per competitor."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import streamlit as st
+
+try:
+    import plotly.express as px  # type: ignore
+    HAS_PLOTLY = True
+except ImportError:  # noqa: BLE001
+    px = None  # type: ignore
+    HAS_PLOTLY = False
+from sqlalchemy import desc, func, select
+
+from signalpulse.db.session import get_session
+from signalpulse.models import Company, CrawlRun, Signal
+from signalpulse.ui.i18n import t
+
+
+def _companies_with_stats() -> list[dict]:
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    with get_session() as s:
+        companies = list(s.execute(select(Company).order_by(Company.name)).scalars().all())
+        out = []
+        for c in companies:
+            week_n = s.execute(
+                select(func.count(Signal.id))
+                .where(Signal.company_id == c.id)
+                .where(Signal.created_at >= week_ago)
+            ).scalar() or 0
+            latest = s.execute(
+                select(Signal)
+                .where(Signal.company_id == c.id)
+                .order_by(desc(Signal.created_at))
+                .limit(1)
+            ).scalars().first()
+            type_rows = s.execute(
+                select(Signal.signal_type, func.count(Signal.id))
+                .where(Signal.company_id == c.id)
+                .group_by(Signal.signal_type)
+            ).all()
+            out.append({
+                "name": c.name,
+                "week_signals": int(week_n),
+                "latest_finding": latest.finding if latest else None,
+                "latest_type": latest.signal_type if latest else None,
+                "latest_at": latest.created_at if latest else None,
+                "type_mix": [(sig_type or "unknown", int(n)) for sig_type, n in type_rows],
+            })
+        return out
+
+
+def render_competitor_overview() -> None:
+    st.subheader(t("competitor_overview"))
+    st.caption(t("overview_caption"))
+
+    cards = _companies_with_stats()
+    if not cards:
+        st.info(t("no_data_yet"))
+        return
+
+    # 2 columns grid
+    n = len(cards)
+    cols_per_row = 2
+    for i in range(0, n, cols_per_row):
+        row = cards[i:i + cols_per_row]
+        cols = st.columns(cols_per_row)
+        for col, comp in zip(cols, row, strict=False):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"### 🏢 {comp['name']}")
+                    st.metric(t("overview_signals"), comp["week_signals"])
+                    if comp["latest_finding"]:
+                        ts = comp["latest_at"].strftime("%m-%d %H:%M") if comp["latest_at"] else "?"
+                        st.markdown(
+                            f"**{t('overview_latest')}** ({comp['latest_type']} · {ts})  \n"
+                            f"{comp['latest_finding'][:140]}"
+                        )
+                    else:
+                        st.caption(t("overview_no_data"))
+                    if comp["type_mix"]:
+                        import pandas as pd
+                        df = pd.DataFrame(comp["type_mix"], columns=["type", "count"])
+                        if HAS_PLOTLY:
+                            fig = px.pie(df, names="type", values="count", hole=0.5)
+                            fig.update_layout(
+                                template="plotly_dark", height=180,
+                                margin=dict(l=0, r=0, t=0, b=0), showlegend=True,
+                            )
+                            st.plotly_chart(fig, width="stretch",
+                                            key=f"ov-pie-{comp['name']}")
+                        else:
+                            st.bar_chart(df, x="type", y="count", height=180)
+
+
+__all__ = ["render_competitor_overview"]

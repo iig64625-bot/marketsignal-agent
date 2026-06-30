@@ -1,1 +1,168 @@
-[   {     "question": "Which competitor recently hired a VP of Engineering?",     "expected_keywords": [       "coze",       "vp",       "engineering",       "agent"     ],     "expected_company": "Coze",     "category": "hiring"   },   {     "question": "What pricing model did Coze switch to?",     "expected_keywords": [       "per-seat",       "seat",       "saas",       "pricing"     ],     "expected_company": "Coze",     "category": "pricing"   },   {     "question": "Which company has SOC2 documentation gaps?",     "expected_keywords": [       "fastgpt",       "soc2",       "regulated",       "compliance"     ],     "expected_company": "FastGPT",     "category": "risk"   },   {     "question": "What did ByteDance do with the coze repository?",     "expected_keywords": [       "bytedance",       "open-sourced",       "apache",       "open source"     ],     "expected_company": "Coze",     "category": "product"   },   {     "question": "Who launched native CRM connectors?",     "expected_keywords": [       "coze",       "salesforce",       "hubspot",       "zoho",       "crm"     ],     "expected_company": "Coze",     "category": "gtm"   },   {     "question": "Which competitor added multi-modal RAG?",     "expected_keywords": [       "fastgpt",       "multi-modal",       "multimodal",       "image",       "audio"     ],     "expected_company": "FastGPT",     "category": "product"   },   {     "question": "What is FastGPT 4.7's new feature?",     "expected_keywords": [       "fastgpt",       "dag",       "visual",       "workflow",       "editor"     ],     "expected_company": "FastGPT",     "category": "product"   },   {     "question": "Where does FastGPT have accuracy issues?",     "expected_keywords": [       "fastgpt",       "context",       "60k",       "tokens",       "accuracy"     ],     "expected_company": "FastGPT",     "category": "risk"   },   {     "question": "What is the target company?",     "expected_keywords": [       "dify"     ],     "expected_company": "Dify",     "category": "meta"   },   {     "question": "Where is Coze investing?",     "expected_keywords": [       "coze",       "workflow",       "automation",       "consolidate"     ],     "expected_company": "Coze",     "category": "product"   },   {     "question": "Which competitor should Dify arm sales with TCO comparison?",     "expected_keywords": [       "coze",       "tco",       "pricing",       "comparison"     ],     "expected_company": "Coze",     "category": "pricing"   },   {     "question": "Who is hiring for agent platforms?",     "expected_keywords": [       "coze",       "vp",       "hiring",       "agent"     ],     "expected_company": "Coze",     "category": "hiring"   },   {     "question": "Which competitor has visual DAG editor in 4.7?",     "expected_keywords": [       "fastgpt",       "dag",       "visual",       "4.7"     ],     "expected_company": "FastGPT",     "category": "product"   },   {     "question": "Where can sales emphasize SOC2 coverage advantage?",     "expected_keywords": [       "fastgpt",       "soc2",       "regulated",       "sales"     ],     "expected_company": "FastGPT",     "category": "risk"   },   {     "question": "What CRM integrations did Coze add?",     "expected_keywords": [       "coze",       "salesforce",       "hubspot",       "zoho"     ],     "expected_company": "Coze",     "category": "gtm"   } ]
+[
+  {
+    "question": "Which competitor recently hired a VP of Engineering?",
+    "expected_keywords": [
+      "coze",
+      "vp",
+      "engineering",
+      "agent"
+    ],
+    "expected_company": "Coze",
+    "category": "hiring"
+  },
+  {
+    "question": "What pricing model did Coze switch to?",
+    "expected_keywords": [
+      "per-seat",
+      "seat",
+      "saas",
+      "pricing"
+    ],
+    "expected_company": "Coze",
+    "category": "pricing"
+  },
+  {
+    "question": "Which company has SOC2 documentation gaps?",
+    "expected_keywords": [
+      "fastgpt",
+      "soc2",
+      "regulated",
+      "compliance"
+    ],
+    "expected_company": "FastGPT",
+    "category": "risk"
+  },
+  {
+    "question": "What did ByteDance do with the coze repository?",
+    "expected_keywords": [
+      "bytedance",
+      "open-sourced",
+      "apache",
+      "open source"
+    ],
+    "expected_company": "Coze",
+    "category": "product"
+  },
+  {
+    "question": "Who launched native CRM connectors?",
+    "expected_keywords": [
+      "coze",
+      "salesforce",
+      "hubspot",
+      "zoho",
+      "crm"
+    ],
+    "expected_company": "Coze",
+    "category": "gtm"
+  },
+  {
+    "question": "Which competitor added multi-modal RAG?",
+    "expected_keywords": [
+      "fastgpt",
+      "multi-modal",
+      "multimodal",
+      "image",
+      "audio"
+    ],
+    "expected_company": "FastGPT",
+    "category": "product"
+  },
+  {
+    "question": "What is FastGPT 4.7's new feature?",
+    "expected_keywords": [
+      "fastgpt",
+      "dag",
+      "visual",
+      "workflow",
+      "editor"
+    ],
+    "expected_company": "FastGPT",
+    "category": "product"
+  },
+  {
+    "question": "Where does FastGPT have accuracy issues?",
+    "expected_keywords": [
+      "fastgpt",
+      "context",
+      "60k",
+      "tokens",
+      "accuracy"
+    ],
+    "expected_company": "FastGPT",
+    "category": "risk"
+  },
+  {
+    "question": "What is the target company?",
+    "expected_keywords": [
+      "dify"
+    ],
+    "expected_company": "Dify",
+    "category": "meta"
+  },
+  {
+    "question": "Where is Coze investing?",
+    "expected_keywords": [
+      "coze",
+      "workflow",
+      "automation",
+      "consolidate"
+    ],
+    "expected_company": "Coze",
+    "category": "product"
+  },
+  {
+    "question": "Which competitor should Dify arm sales with TCO comparison?",
+    "expected_keywords": [
+      "coze",
+      "tco",
+      "pricing",
+      "comparison"
+    ],
+    "expected_company": "Coze",
+    "category": "pricing"
+  },
+  {
+    "question": "Who is hiring for agent platforms?",
+    "expected_keywords": [
+      "coze",
+      "vp",
+      "hiring",
+      "agent"
+    ],
+    "expected_company": "Coze",
+    "category": "hiring"
+  },
+  {
+    "question": "Which competitor has visual DAG editor in 4.7?",
+    "expected_keywords": [
+      "fastgpt",
+      "dag",
+      "visual",
+      "4.7"
+    ],
+    "expected_company": "FastGPT",
+    "category": "product"
+  },
+  {
+    "question": "Where can sales emphasize SOC2 coverage advantage?",
+    "expected_keywords": [
+      "fastgpt",
+      "soc2",
+      "regulated",
+      "sales"
+    ],
+    "expected_company": "FastGPT",
+    "category": "risk"
+  },
+  {
+    "question": "What CRM integrations did Coze add?",
+    "expected_keywords": [
+      "coze",
+      "salesforce",
+      "hubspot",
+      "zoho"
+    ],
+    "expected_company": "Coze",
+    "category": "gtm"
+  }
+]

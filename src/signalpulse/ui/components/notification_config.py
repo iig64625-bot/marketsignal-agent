@@ -1,1 +1,135 @@
-"""Notification config v1: 飞书/钉钉 webhook 配置 + 测试 + 写 .env.""" from __future__ import annotations  import os from pathlib import Path  import streamlit as st  from signalpulse.ui.i18n import t   def _read_env() -> dict[str, str]:     env = Path(".env")     out: dict[str, str] = {}     if env.exists():         for line in env.read_text(encoding="utf-8").splitlines():             line = line.strip()             if not line or line.startswith("#") or "=" not in line:                 continue             k, v = line.split("=", 1)             out[k.strip()] = v.strip().strip('"').strip("'")     return out   def _write_env_kv(updates: dict[str, str]) -> None:     env = Path(".env")     cur = _read_env()     cur.update({k: v for k, v in updates.items() if v})     lines = [f"{k}={v}" for k, v in cur.items()]     env.write_text("\n".join(lines) + "\n", encoding="utf-8")   def _test_feishu(url: str, secret: str) -> tuple[bool, str]:     import base64     import hashlib     import hmac     import time      import requests  # type: ignore     ts = str(int(time.time()))     string_to_sign = f"{ts}\n{secret}"     h = hmac.new(string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()     sign = base64.b64encode(h).decode("utf-8")     payload = {         "timestamp": ts,         "sign": sign,         "msg_type": "interactive",         "card": {             "header": {"title": {"tag": "plain", "content": "🔔 SignalPulse 测试通知"},                        "template": "green"},             "elements": [{"tag": "markdown",                           "content": "**Hello from SignalPulse**\n这是一条测试通知 ✅\n如果你看到这条卡片，配置就 OK 了。"}],         },     }     r = requests.post(url, json=payload, timeout=10)     body = r.text     return (r.status_code == 200 and '"code":0' in body.replace(" ", "")), body   def _test_dingtalk(url: str) -> tuple[bool, str]:     import requests     payload = {"msgtype": "markdown", "markdown":                {"title": "SignalPulse 测试", "text": "**SignalPulse 测试**\n配置 OK ✅"}}     r = requests.post(url, json=payload, timeout=10)     return r.status_code == 200, r.text   def render_notification_config() -> None:     st.subheader(t("notify_title"))     st.caption(t("notify_caption"))      env = _read_env()     cur_url = env.get("FEISHU_WEBHOOK_URL", "") or env.get("DINGTALK_WEBHOOK_URL", "")     cur_secret = env.get("FEISHU_WEBHOOK_SECRET", "")     cur_provider = "feishu" if env.get("FEISHU_WEBHOOK_URL") else (         "dingtalk" if env.get("DINGTALK_WEBHOOK_URL") else "none"     )      provider = st.selectbox(         t("notify_provider"),         options=["none", "feishu", "dingtalk"],         index=["none", "feishu", "dingtalk"].index(cur_provider),         format_func=lambda x: {             "none": t("notify_provider_none"),             "feishu": t("notify_provider_feishu"),             "dingtalk": t("notify_provider_dingtalk"),         }[x],     )      if provider == "none":         st.info(t("notify_provider_none"))         return      url = st.text_input(t("notify_webhook_url"), value=cur_url, type="password")     secret = ""     if provider == "feishu":         secret = st.text_input(t("notify_webhook_secret"), value=cur_secret, type="password")      col1, col2, col3 = st.columns(3)     with col1:         if st.button(t("notify_test_btn"), key="notif_test"):             if not url:                 st.error(t("notify_url_required"))             else:                 try:                     if provider == "feishu":                         ok, body = _test_feishu(url, secret)                     else:                         ok, body = _test_dingtalk(url)                     if ok:                         st.success(t("notify_test_ok"))                     else:                         st.error(f"{t('notify_test_fail')}: {body[:200]}")                 except Exception as exc:  # noqa: BLE001                     st.error(f"{t('notify_test_fail')}: {exc}")      with col2:         if st.button(t("notify_save_btn"), key="notif_save"):             updates = {}             if provider == "feishu":                 updates["FEISHU_WEBHOOK_URL"] = url                 updates["FEISHU_WEBHOOK_SECRET"] = secret                 updates.pop("DINGTALK_WEBHOOK_URL", None)             elif provider == "dingtalk":                 updates["DINGTALK_WEBHOOK_URL"] = url                 updates.pop("FEISHU_WEBHOOK_URL", None)                 updates.pop("FEISHU_WEBHOOK_SECRET", None)             _write_env_kv(updates)             st.success(t("notify_saved"))      with col3:         st.caption(t("notify_env_size").format(size=os.path.getsize('.env') if os.path.exists('.env') else 0))   __all__ = ["render_notification_config"]
+"""Notification config v1: 飞书/钉钉 webhook 配置 + 测试 + 写 .env."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import streamlit as st
+
+from signalpulse.ui.i18n import t
+
+
+def _read_env() -> dict[str, str]:
+    env = Path(".env")
+    out: dict[str, str] = {}
+    if env.exists():
+        for line in env.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip().strip('"').strip("'")
+    return out
+
+
+def _write_env_kv(updates: dict[str, str]) -> None:
+    env = Path(".env")
+    cur = _read_env()
+    cur.update({k: v for k, v in updates.items() if v})
+    lines = [f"{k}={v}" for k, v in cur.items()]
+    env.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _test_feishu(url: str, secret: str) -> tuple[bool, str]:
+    import base64
+    import hashlib
+    import hmac
+    import time
+
+    import requests  # type: ignore
+    ts = str(int(time.time()))
+    string_to_sign = f"{ts}\n{secret}"
+    h = hmac.new(string_to_sign.encode("utf-8"), digestmod=hashlib.sha256).digest()
+    sign = base64.b64encode(h).decode("utf-8")
+    payload = {
+        "timestamp": ts,
+        "sign": sign,
+        "msg_type": "interactive",
+        "card": {
+            "header": {"title": {"tag": "plain", "content": "🔔 SignalPulse 测试通知"},
+                       "template": "green"},
+            "elements": [{"tag": "markdown",
+                          "content": "**Hello from SignalPulse**\n这是一条测试通知 ✅\n如果你看到这条卡片，配置就 OK 了。"}],
+        },
+    }
+    r = requests.post(url, json=payload, timeout=10)
+    body = r.text
+    return (r.status_code == 200 and '"code":0' in body.replace(" ", "")), body
+
+
+def _test_dingtalk(url: str) -> tuple[bool, str]:
+    import requests
+    payload = {"msgtype": "markdown", "markdown":
+               {"title": "SignalPulse 测试", "text": "**SignalPulse 测试**\n配置 OK ✅"}}
+    r = requests.post(url, json=payload, timeout=10)
+    return r.status_code == 200, r.text
+
+
+def render_notification_config() -> None:
+    st.subheader(t("notify_title"))
+    st.caption(t("notify_caption"))
+
+    env = _read_env()
+    cur_url = env.get("FEISHU_WEBHOOK_URL", "") or env.get("DINGTALK_WEBHOOK_URL", "")
+    cur_secret = env.get("FEISHU_WEBHOOK_SECRET", "")
+    cur_provider = "feishu" if env.get("FEISHU_WEBHOOK_URL") else (
+        "dingtalk" if env.get("DINGTALK_WEBHOOK_URL") else "none"
+    )
+
+    provider = st.selectbox(
+        t("notify_provider"),
+        options=["none", "feishu", "dingtalk"],
+        index=["none", "feishu", "dingtalk"].index(cur_provider),
+        format_func=lambda x: {
+            "none": t("notify_provider_none"),
+            "feishu": t("notify_provider_feishu"),
+            "dingtalk": t("notify_provider_dingtalk"),
+        }[x],
+    )
+
+    if provider == "none":
+        st.info(t("notify_provider_none"))
+        return
+
+    url = st.text_input(t("notify_webhook_url"), value=cur_url, type="password")
+    secret = ""
+    if provider == "feishu":
+        secret = st.text_input(t("notify_webhook_secret"), value=cur_secret, type="password")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button(t("notify_test_btn"), key="notif_test"):
+            if not url:
+                st.error(t("notify_url_required"))
+            else:
+                try:
+                    if provider == "feishu":
+                        ok, body = _test_feishu(url, secret)
+                    else:
+                        ok, body = _test_dingtalk(url)
+                    if ok:
+                        st.success(t("notify_test_ok"))
+                    else:
+                        st.error(f"{t('notify_test_fail')}: {body[:200]}")
+                except Exception as exc:  # noqa: BLE001
+                    st.error(f"{t('notify_test_fail')}: {exc}")
+
+    with col2:
+        if st.button(t("notify_save_btn"), key="notif_save"):
+            updates = {}
+            if provider == "feishu":
+                updates["FEISHU_WEBHOOK_URL"] = url
+                updates["FEISHU_WEBHOOK_SECRET"] = secret
+                updates.pop("DINGTALK_WEBHOOK_URL", None)
+            elif provider == "dingtalk":
+                updates["DINGTALK_WEBHOOK_URL"] = url
+                updates.pop("FEISHU_WEBHOOK_URL", None)
+                updates.pop("FEISHU_WEBHOOK_SECRET", None)
+            _write_env_kv(updates)
+            st.success(t("notify_saved"))
+
+    with col3:
+        st.caption(t("notify_env_size").format(size=os.path.getsize('.env') if os.path.exists('.env') else 0))
+
+
+__all__ = ["render_notification_config"]

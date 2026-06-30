@@ -1,1 +1,79 @@
-"""Track LLM token usage and estimate cost per run.""" from __future__ import annotations  import threading from dataclasses import dataclass, field  _LOCK = threading.Lock() _STATE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "models": {}}   @dataclass class CostEstimate:     input_tokens: int = 0     output_tokens: int = 0     calls: int = 0     estimated_cost_usd: float = 0.0     by_model: dict = field(default_factory=dict)   def reset() -> None:     with _LOCK:         _STATE["input_tokens"] = 0         _STATE["output_tokens"] = 0         _STATE["calls"] = 0         _STATE["models"] = {}   def add_usage(model: str, input_tokens: int, output_tokens: int) -> None:     with _LOCK:         _STATE["input_tokens"] += input_tokens         _STATE["output_tokens"] += output_tokens         _STATE["calls"] += 1         m = _STATE["models"].setdefault(model, {"input": 0, "output": 0, "calls": 0})         m["input"] += input_tokens         m["output"] += output_tokens         m["calls"] += 1   def get_estimate(price_table: dict | None = None) -> CostEstimate:     """Return a snapshot estimate. price_table: {model: (in_price, out_price)} per 1M tokens."""     # Default pricing (USD per 1M tokens)     default = {         "gpt-4o-mini": (0.15, 0.60),         "gpt-4o": (2.50, 10.00),         "gpt-5.4": (2.50, 10.00),         "claude-haiku-4-5": (0.80, 4.00),         "claude-sonnet-4-6": (3.00, 15.00),         "deepseek-v3": (0.27, 1.10),         "deepseek-v4-flash": (1.00, 2.00),     }     table = {**default, **(price_table or {})}     with _LOCK:         est = CostEstimate(             input_tokens=_STATE["input_tokens"],             output_tokens=_STATE["output_tokens"],             calls=_STATE["calls"],             by_model=dict(_STATE["models"]),         )     total = 0.0     for model, usage in est.by_model.items():         in_p, out_p = table.get(model, (1.0, 3.0))         total += (usage["input"] / 1_000_000) * in_p         total += (usage["output"] / 1_000_000) * out_p     est.estimated_cost_usd = total     return est   def format_summary(est: CostEstimate | None = None, cny_rate: float = 7.2) -> str:     if est is None:         est = get_estimate()     cny = est.estimated_cost_usd * cny_rate     return (         f"LLM usage: {est.calls} calls, "         f"{est.input_tokens:,} in + {est.output_tokens:,} out tokens, "         f"~${est.estimated_cost_usd:.4f} (≈¥{cny:.3f})"     )   __all__ = ["reset", "add_usage", "get_estimate", "format_summary", "CostEstimate"]
+"""Track LLM token usage and estimate cost per run."""
+from __future__ import annotations
+
+import threading
+from dataclasses import dataclass, field
+
+_LOCK = threading.Lock()
+_STATE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "models": {}}
+
+
+@dataclass
+class CostEstimate:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    calls: int = 0
+    estimated_cost_usd: float = 0.0
+    by_model: dict = field(default_factory=dict)
+
+
+def reset() -> None:
+    with _LOCK:
+        _STATE["input_tokens"] = 0
+        _STATE["output_tokens"] = 0
+        _STATE["calls"] = 0
+        _STATE["models"] = {}
+
+
+def add_usage(model: str, input_tokens: int, output_tokens: int) -> None:
+    with _LOCK:
+        _STATE["input_tokens"] += input_tokens
+        _STATE["output_tokens"] += output_tokens
+        _STATE["calls"] += 1
+        m = _STATE["models"].setdefault(model, {"input": 0, "output": 0, "calls": 0})
+        m["input"] += input_tokens
+        m["output"] += output_tokens
+        m["calls"] += 1
+
+
+def get_estimate(price_table: dict | None = None) -> CostEstimate:
+    """Return a snapshot estimate. price_table: {model: (in_price, out_price)} per 1M tokens."""
+    # Default pricing (USD per 1M tokens)
+    default = {
+        "gpt-4o-mini": (0.15, 0.60),
+        "gpt-4o": (2.50, 10.00),
+        "gpt-5.4": (2.50, 10.00),
+        "claude-haiku-4-5": (0.80, 4.00),
+        "claude-sonnet-4-6": (3.00, 15.00),
+        "deepseek-v3": (0.27, 1.10),
+        "deepseek-v4-flash": (1.00, 2.00),
+    }
+    table = {**default, **(price_table or {})}
+    with _LOCK:
+        est = CostEstimate(
+            input_tokens=_STATE["input_tokens"],
+            output_tokens=_STATE["output_tokens"],
+            calls=_STATE["calls"],
+            by_model=dict(_STATE["models"]),
+        )
+    total = 0.0
+    for model, usage in est.by_model.items():
+        in_p, out_p = table.get(model, (1.0, 3.0))
+        total += (usage["input"] / 1_000_000) * in_p
+        total += (usage["output"] / 1_000_000) * out_p
+    est.estimated_cost_usd = total
+    return est
+
+
+def format_summary(est: CostEstimate | None = None, cny_rate: float = 7.2) -> str:
+    if est is None:
+        est = get_estimate()
+    cny = est.estimated_cost_usd * cny_rate
+    return (
+        f"LLM usage: {est.calls} calls, "
+        f"{est.input_tokens:,} in + {est.output_tokens:,} out tokens, "
+        f"~${est.estimated_cost_usd:.4f} (≈¥{cny:.3f})"
+    )
+
+
+__all__ = ["reset", "add_usage", "get_estimate", "format_summary", "CostEstimate"]

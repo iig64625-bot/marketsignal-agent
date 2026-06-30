@@ -1,1 +1,8 @@
-$ErrorActionPreference = "Continue" $ProjectRoot = $PSScriptRoot Set-Location $ProjectRoot $env:PYTHONPATH = "src" $env:STREAMLIT_BROWSER_GATHER_USAGE_STATS = "false" $env:STREAMLIT_GLOBAL_DISABLE_WIDGET_STATE_PERSISTENCE = "true" Write-Host "[start_ui] launching streamlit on :8501 (cwd=$ProjectRoot)" & ".\.venv\Scripts\python.exe" -m streamlit run "src\signalpulse\ui\app.py" --server.port 8501 --server.headless true --server.address 0.0.0.0 --browser.gatherUsageStats false
+$ErrorActionPreference = "Continue"
+$ProjectRoot = $PSScriptRoot
+Set-Location $ProjectRoot
+$env:PYTHONPATH = "src"
+$env:STREAMLIT_BROWSER_GATHER_USAGE_STATS = "false"
+$env:STREAMLIT_GLOBAL_DISABLE_WIDGET_STATE_PERSISTENCE = "true"
+Write-Host "[start_ui] launching streamlit on :8501 (cwd=$ProjectRoot)"
+& ".\.venv\Scripts\python.exe" -m streamlit run "src\signalpulse\ui\app.py" --server.port 8501 --server.headless true --server.address 0.0.0.0 --browser.gatherUsageStats false

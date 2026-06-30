@@ -1,1 +1,272 @@
-{   "total": 15,   "recall_at_1": 0.9333333333333333,   "recall_at_3": 0.9333333333333333,   "recall_at_5": 0.9333333333333333,   "mrr": 0.9333333333333333,   "mean_keyword_coverage": 0.7533333333333334,   "by_category": {     "hiring": {       "recall_at_3": 1.0,       "mrr": 1.0,       "keyword_coverage": 1.0,       "n": 2.0     },     "pricing": {       "recall_at_3": 1.0,       "mrr": 1.0,       "keyword_coverage": 0.5,       "n": 2.0     },     "risk": {       "recall_at_3": 1.0,       "mrr": 1.0,       "keyword_coverage": 0.75,       "n": 3.0     },     "product": {       "recall_at_3": 1.0,       "mrr": 1.0,       "keyword_coverage": 0.8099999999999999,       "n": 5.0     },     "gtm": {       "recall_at_3": 1.0,       "mrr": 1.0,       "keyword_coverage": 1.0,       "n": 2.0     },     "meta": {       "recall_at_3": 0.0,       "mrr": 0.0,       "keyword_coverage": 0.0,       "n": 1.0     }   },   "per_item": [     {       "question": "Which competitor recently hired a VP of Engineering?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze"       ]     },     {       "question": "What pricing model did Coze switch to?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.75,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "Coze",         "Coze",         "Coze",         "Coze"       ]     },     {       "question": "Which company has SOC2 documentation gaps?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.75,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT"       ]     },     {       "question": "What did ByteDance do with the coze repository?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.5,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "Coze",         "Coze",         "Coze",         "FastGPT"       ]     },     {       "question": "Who launched native CRM connectors?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "Coze"       ]     },     {       "question": "Which competitor added multi-modal RAG?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.8,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT"       ]     },     {       "question": "What is FastGPT 4.7's new feature?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT",         "FastGPT",         "FastGPT",         "Coze",         "FastGPT"       ]     },     {       "question": "Where does FastGPT have accuracy issues?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT",         "FastGPT",         "FastGPT",         "FastGPT"       ]     },     {       "question": "What is the target company?",       "expected_company": "Dify",       "first_relevant_rank": null,       "in_top1": false,       "in_top3": false,       "in_top5": false,       "keyword_coverage": 0.0,       "reciprocal_rank": 0.0,       "retrieved_companies": []     },     {       "question": "Where is Coze investing?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.75,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "Coze",         "Coze",         "Coze",         "Coze"       ]     },     {       "question": "Which competitor should Dify arm sales with TCO comparison?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.25,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "FastGPT",         "Coze",         "FastGPT"       ]     },     {       "question": "Who is hiring for agent platforms?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "FastGPT",         "Coze"       ]     },     {       "question": "Which competitor has visual DAG editor in 4.7?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT",         "Coze"       ]     },     {       "question": "Where can sales emphasize SOC2 coverage advantage?",       "expected_company": "FastGPT",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 0.5,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "FastGPT"       ]     },     {       "question": "What CRM integrations did Coze add?",       "expected_company": "Coze",       "first_relevant_rank": 1,       "in_top1": true,       "in_top3": true,       "in_top5": true,       "keyword_coverage": 1.0,       "reciprocal_rank": 1.0,       "retrieved_companies": [         "Coze",         "Coze",         "Coze",         "Coze",         "Coze"       ]     }   ],   "notes": "Evaluated on 15 questions; k_max=5. Retriever=fallback-keyword. Faithfulness is reported via :func:`evals.faithfulness.faithfulness_score`." }
+{
+  "total": 15,
+  "recall_at_1": 0.9333333333333333,
+  "recall_at_3": 0.9333333333333333,
+  "recall_at_5": 0.9333333333333333,
+  "mrr": 0.9333333333333333,
+  "mean_keyword_coverage": 0.7533333333333334,
+  "by_category": {
+    "hiring": {
+      "recall_at_3": 1.0,
+      "mrr": 1.0,
+      "keyword_coverage": 1.0,
+      "n": 2.0
+    },
+    "pricing": {
+      "recall_at_3": 1.0,
+      "mrr": 1.0,
+      "keyword_coverage": 0.5,
+      "n": 2.0
+    },
+    "risk": {
+      "recall_at_3": 1.0,
+      "mrr": 1.0,
+      "keyword_coverage": 0.75,
+      "n": 3.0
+    },
+    "product": {
+      "recall_at_3": 1.0,
+      "mrr": 1.0,
+      "keyword_coverage": 0.8099999999999999,
+      "n": 5.0
+    },
+    "gtm": {
+      "recall_at_3": 1.0,
+      "mrr": 1.0,
+      "keyword_coverage": 1.0,
+      "n": 2.0
+    },
+    "meta": {
+      "recall_at_3": 0.0,
+      "mrr": 0.0,
+      "keyword_coverage": 0.0,
+      "n": 1.0
+    }
+  },
+  "per_item": [
+    {
+      "question": "Which competitor recently hired a VP of Engineering?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze"
+      ]
+    },
+    {
+      "question": "What pricing model did Coze switch to?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.75,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze"
+      ]
+    },
+    {
+      "question": "Which company has SOC2 documentation gaps?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.75,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "What did ByteDance do with the coze repository?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.5,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze",
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "Who launched native CRM connectors?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "Coze"
+      ]
+    },
+    {
+      "question": "Which competitor added multi-modal RAG?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.8,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "What is FastGPT 4.7's new feature?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT",
+        "FastGPT",
+        "FastGPT",
+        "Coze",
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "Where does FastGPT have accuracy issues?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT",
+        "FastGPT",
+        "FastGPT",
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "What is the target company?",
+      "expected_company": "Dify",
+      "first_relevant_rank": null,
+      "in_top1": false,
+      "in_top3": false,
+      "in_top5": false,
+      "keyword_coverage": 0.0,
+      "reciprocal_rank": 0.0,
+      "retrieved_companies": []
+    },
+    {
+      "question": "Where is Coze investing?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.75,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze"
+      ]
+    },
+    {
+      "question": "Which competitor should Dify arm sales with TCO comparison?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.25,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "FastGPT",
+        "Coze",
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "Who is hiring for agent platforms?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "FastGPT",
+        "Coze"
+      ]
+    },
+    {
+      "question": "Which competitor has visual DAG editor in 4.7?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT",
+        "Coze"
+      ]
+    },
+    {
+      "question": "Where can sales emphasize SOC2 coverage advantage?",
+      "expected_company": "FastGPT",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 0.5,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "FastGPT"
+      ]
+    },
+    {
+      "question": "What CRM integrations did Coze add?",
+      "expected_company": "Coze",
+      "first_relevant_rank": 1,
+      "in_top1": true,
+      "in_top3": true,
+      "in_top5": true,
+      "keyword_coverage": 1.0,
+      "reciprocal_rank": 1.0,
+      "retrieved_companies": [
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze",
+        "Coze"
+      ]
+    }
+  ],
+  "notes": "Evaluated on 15 questions; k_max=5. Retriever=fallback-keyword. Faithfulness is reported via :func:`evals.faithfulness.faithfulness_score`."
+}

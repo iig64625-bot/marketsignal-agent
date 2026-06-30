@@ -1,1 +1,30 @@
-target:   name: Cursor   website: https://cursor.sh  competitors:   - name: Windsurf     website: https://codeium.com/windsurf     sources:       - type: changelog         url: https://codeium.com/changelog       - type: github         url: https://github.com/CodeiumAI/windsurf       - type: webpage         url: https://codeium.com/windsurf    - name: GitHub Copilot     website: https://github.com/features/copilot     sources:       - type: changelog         url: https://github.blog/changelog/label/github-copilot/       - type: webpage         url: https://github.com/features/copilot    - name: Claude Code     website: https://docs.anthropic.com/en/docs/claude-code     sources:       - type: changelog         url: https://docs.anthropic.com/en/docs/claude-code/changelog       - type: webpage         url: https://www.anthropic.com/claude-code
+﻿target:
+  name: Cursor
+  website: https://cursor.sh
+
+competitors:
+  - name: Windsurf
+    website: https://codeium.com/windsurf
+    sources:
+      - type: changelog
+        url: https://codeium.com/changelog
+      - type: github
+        url: https://github.com/CodeiumAI/windsurf
+      - type: webpage
+        url: https://codeium.com/windsurf
+
+  - name: GitHub Copilot
+    website: https://github.com/features/copilot
+    sources:
+      - type: changelog
+        url: https://github.blog/changelog/label/github-copilot/
+      - type: webpage
+        url: https://github.com/features/copilot
+
+  - name: Claude Code
+    website: https://docs.anthropic.com/en/docs/claude-code
+    sources:
+      - type: changelog
+        url: https://docs.anthropic.com/en/docs/claude-code/changelog
+      - type: webpage
+        url: https://www.anthropic.com/claude-code

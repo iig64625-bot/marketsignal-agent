@@ -1,1 +1,22 @@
-target:   name: Pinduoduo   website: https://www.pinduoduo.com  competitors:   - name: Temu     website: https://www.temu.com     sources:       - type: webpage         url: https://www.temu.com/merchant-center       - type: webpage         url: https://seller.temu.com    - name: SHEIN     website: https://www.shein.com     sources:       - type: webpage         url: https://www.shein.com/about-us.html       - type: rss         url: https://www.shein.com/rss.xml       - type: github         url: https://github.com/SHEIN-Marketing
+﻿target:
+  name: Pinduoduo
+  website: https://www.pinduoduo.com
+
+competitors:
+  - name: Temu
+    website: https://www.temu.com
+    sources:
+      - type: webpage
+        url: https://www.temu.com/merchant-center
+      - type: webpage
+        url: https://seller.temu.com
+
+  - name: SHEIN
+    website: https://www.shein.com
+    sources:
+      - type: webpage
+        url: https://www.shein.com/about-us.html
+      - type: rss
+        url: https://www.shein.com/rss.xml
+      - type: github
+        url: https://github.com/SHEIN-Marketing

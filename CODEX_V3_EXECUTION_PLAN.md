@@ -1,1 +1,445 @@
-# SignalPulse — Codex V3 改进执行文档  > **生成时间**：2026-06-24 > **项目路径**：D:\新项目 > **前序**：V1（API/UI/测试 57→154）+ V2（CORS/except/prompt/LRU，测试 154→171） > **本轮目标**：修复 V2 遗留问题 + 进一步优化，共 5 个 Task > **执行顺序**：Task 1 → Task 5，严格按序  ---  ## Task 1: 统一 datetime.utcnow() → datetime.now(UTC)  ### 1.1 问题  全项目有 **21 处** `datetime.utcnow()` 调用，分布在 13 个文件中。 Python 3.12+ 已标记 `utcnow()` 为 deprecated。项目当前 CI 跑 3.10/3.11， 但迟早会升级，现在统一改掉比以后批量改更安全。  ### 1.2 改法  **第一步**：修改 `models/base.py` 的 `utcnow()` 函数（全局工具函数）  ```python # src/marketsignal/models/base.py — 找到 utcnow() 函数，改为：  import datetime as _dt  def utcnow() -> _dt.datetime:     """Return the current UTC time (timezone-aware)."""     return _dt.datetime.now(_dt.timezone.utc) ```  **第二步**：把以下 4 个文件中的直接 `datetime.utcnow()` 调用改为使用 `base.utcnow()` 或 `datetime.now(timezone.utc)`（优先用 base.utcnow 保持一致性）：  | 文件 | 行 | 当前代码 | 改为 | |---|---|---|---| | `api/routes/runs.py` | 143 | `_dt.datetime.utcnow()` | `from marketsignal.models.base import utcnow` 然后 `utcnow()` | | `api/routes/runs.py` | 151 | `_dt.datetime.utcnow()` | `utcnow()` | | `api/routes/runs.py` | 163 | `_dt.datetime.utcnow()` | `utcnow()` | | `services/sample_loader.py` | 50 | `_dt.datetime.utcnow()` | `from marketsignal.models.base import utcnow` 然后 `utcnow()` | | `agents/nodes/finalize.py` | 20 | `_dt.datetime.utcnow()` | `utcnow()` | | `agents/nodes/load_config.py` | 27 | `_dt.datetime.utcnow()` | `utcnow()` | | `agents/nodes/load_sample.py` | 38-39 | `_dt.datetime.utcnow()` | `utcnow()` |  **第三步**：对不使用 `_dt.datetime.utcnow()` 的变体，直接替换表达式：  | 文件 | 行 | 当前 | 改为 | |---|---|---|---| | `agents/nodes/generate_weekly_report.py` | 52 | `datetime.utcnow().date()` | `datetime.now(timezone.utc).date()` | | `ingestion/fetch_github.py` | 50 | `_dt.datetime.utcnow().timestamp()` | `_dt.datetime.now(_dt.timezone.utc).timestamp()` | | `ingestion/fetch_github.py` | 69 | `_dt.datetime.utcnow()` | `utcnow()` | | `ingestion/fetch_rss.py` | 33 | `_dt.datetime.utcnow()` | `utcnow()` | | `ingestion/fetch_webpage.py` | 46 | `_dt.datetime.utcnow()` | `utcnow()` | | `evals/eval_runner.py` | 44 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` | | `ingestion/health_check.py` | 28 | `_dt.datetime.utcnow().isoformat()` | `_dt.datetime.now(_dt.timezone.utc).isoformat()` | | `utils/tracing.py` | 160 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` | | `utils/tracing.py` | 192 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` | | `utils/tracing.py` | 219 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` | | `utils/tracing.py` | 234 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |  ### 1.3 验证  ```bash cd D:\新项目 .venv\Scripts\python.exe -m pytest tests/ -q --tb=short # 171 passed  # 确认无残留 utcnow grep -rn "\.utcnow()" src/marketsignal/ --include="*.py" # 仅 base.py 中的函数定义保留，其他应为 0 ``` ---  ## Task 2: 收窄 3 处宽泛 except Exception  ### 2.1 问题  V2 修复了 `except Exception: pass` 的 5 处，但以下 3 处改为加了 `logger` 却没收窄异常类型。它们仍然会吞掉意外异常（如 MemoryError、KeyboardInterrupt 不应被捕获的场景）。  ### 2.2 具体改动  **文件：`normalization/content_extractor.py:75`**  ```python # 当前 except Exception as exc:     logger.debug("content_extractor: language detect failed, default to en: {}", exc)     language = "en"  # 改为 from langdetect.lang_detect_exception import LangDetectException  except LangDetectException as exc:     logger.debug("content_extractor: language detect failed, default to en: {}", exc)     language = "en" ```  **文件：`rag/vector_store.py:109`**  ```python # 当前 except Exception as exc:  # noqa: BLE001     logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc)  # 改为 except (ValueError, chromadb.errors.ChromaError) as exc:     logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc) ```  注意：需要确认 `chromadb.errors.ChromaError` 的实际 import 路径。 如果 chromadb 版本没有 `chromadb.errors`，则改为 `except Exception as exc` 保留但添加注释说明原因。  **文件：`scheduler.py:161`**  ```python # 当前 except Exception as exc:  # noqa: BLE001     logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc)  # 改为 except (KeyError, JobLookupError) as exc:     logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc) ```  注意：`JobLookupError` 来自 `apscheduler.jobstores.base`， 需要在文件顶部加 `from apscheduler.jobstores.base import JobLookupError`。 如果 APScheduler 版本不同，用对应的 import 路径。  ### 2.3 保留不动的 except（已确认合理）  | 文件 | 原因 | |---|---| | `db/session.py:44` — `except Exception:` | DB 事务 rollback 安全网，必须兜底 | | `api/routes/ws.py:159,164` — `except Exception:` | WebSocket 错误边界，必须兜底 | | `cli.py:113` — `except Exception as exc:` | CLI 主循环兜底，合理 | | `utils/tracing.py:229` — `except Exception as exc:` | trace_node 装饰器错误边界，会 re-raise | | `ui/components/sidebar.py:50,62` — `except Exception as exc:` | UI 组件容错，合理 |  ### 2.4 验证  ```bash .venv\Scripts\python.exe -m pytest tests/ -q --tb=short # 171+ passed  # 确认 3 处已收窄 grep -n "except Exception" src/marketsignal/normalization/content_extractor.py # 应为 0（改为 LangDetectException）  grep -n "except Exception" src/marketsignal/rag/vector_store.py # 应为 0 或只剩有 noqa 注释的合理兜底  grep -n "except Exception" src/marketsignal/scheduler.py # 应为 0（改为具体异常） ```  ---  ## Task 3: CORS_ORIGINS 支持环境变量覆盖  ### 3.1 问题  `settings.py` 的注释写了 "Override via the CORS_ORIGINS env var"， 但 `pydantic-settings` 对 `list[str]` 类型的环境变量需要 JSON 格式输入， 用户直接设 `CORS_ORIGINS=http://localhost:8501` 会解析失败。  ### 3.2 改法  **文件：`config/settings.py`**  ```python # 当前 cors_origins: list[str] = [     "http://localhost:8501",     "http://localhost:3000",     "http://127.0.0.1:8501",     "http://127.0.0.1:3000", ]  # 改为：用逗号分隔的字符串，pydantic-settings 自动解析为 list cors_origins: list[str] = Field(     default=[         "http://localhost:8501",   # Streamlit dev         "http://localhost:3000",   # next.js / react dev         "http://127.0.0.1:8501",         "http://127.0.0.1:3000",     ],     description="Allowed CORS origins. Set via CORS_ORIGINS env var (comma-separated).", ) ```  **同时在 `.env.example` 末尾添加**：  ```env # CORS origins (comma-separated). Default: localhost:8501,localhost:3000 # CORS_ORIGINS=http://localhost:8501,http://localhost:3000 ```  ### 3.3 验证  ```bash # 测试默认值 .venv\Scripts\python.exe -c "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)" # 应输出默认列表  # 测试环境变量覆盖 CORS_ORIGINS="http://example.com,http://other.com" .venv\Scripts\python.exe -c \   "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)" # 应输出 ['http://example.com', 'http://other.com']  .venv\Scripts\python.exe -m pytest tests/ -q --tb=short ``` ---  ## Task 4: 新增推荐优化  ### 4.1 API 缺少 DELETE 端点  **问题**：API 没有任何删除端点，无法清理测试数据或过期 run。  **改法**：在 `api/routes/runs.py` 新增一个 DELETE 端点：  ```python @router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT) def delete_run(run_id: str, session: Session = Depends(get_db)) -> None:     """Delete a crawl run and its associated eval runs."""     run = session.get(CrawlRun, run_id)     if not run:         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")     # Cascade delete associated eval runs     session.query(EvalRun).filter_by(crawl_run_id=run_id).delete()     session.delete(run)     session.flush() ```  **验证**：  ```bash .venv\Scripts\python.exe -m pytest tests/api/test_app.py -q --tb=short # 新增一个测试：POST /runs → GET /runs/{id} → DELETE /runs/{id} → GET /runs/{id} 返回 404 ```  ### 4.2 RunCreateRequest 缺少 target_company 字段  **问题**：`POST /runs` 的请求体没有 `target_company` 字段， API 调用者无法指定分析目标，只能依赖 YAML config 里的默认值。  **改法**：在 `api/routes/runs.py` 的 `RunCreateRequest` 中新增字段：  ```python class RunCreateRequest(BaseModel):     """Body for ``POST /runs``."""      config_path: str = Field(         default="configs/competitors.ai-agent.yaml",         description="Path to the competitor YAML config.",     )     target_company: str | None = Field(         default=None,         description="Override the target company name from the config. "         "If omitted, the value from the YAML config is used.",     )     use_sample_dataset: bool = Field(         default=False,         description="Skip fetch / LLM and use the bundled sample dataset.",     )     triggered_by: str = Field(default="api", max_length=64) ```  然后在 `_execute_pipeline_async` 中使用：  ```python def _execute_pipeline_async(     run_id: str, config_path: str, target_company_override: str | None,     use_sample_dataset: bool, ) -> None:     ...     target_company = "Dify"  # safe fallback     try:         cfg = load_pipeline_config(config_path)         target_company = target_company_override or cfg.target.name     except Exception as cfg_exc:         if target_company_override:             target_company = target_company_override         logger.warning(...)     ... ```  `create_run` 调用处同步更新：  ```python background.add_task(     _execute_pipeline_async, run_id, body.config_path,     body.target_company, body.use_sample_dataset, ) ```  **验证**：  ```bash .venv\Scripts\python.exe -m pytest tests/api/test_app.py -q --tb=short # 新增测试：POST /runs with target_company="Coze" → 确认 pipeline 收到正确的 target ```  ### 4.3 CLI run 命令增加 --target 参数  **问题**：CLI `run` 命令没有 `--target` 参数，无法从命令行覆盖分析目标。  **改法**：在 `cli.py` 的 `run` subparser 中新增参数：  ```python run.add_argument(     "--target",     default=None,     help="Override the target company name (default: read from config YAML)", ) ```  在 `_run_pipeline` 中使用：  ```python def _run_pipeline(config_path: str, *, target_override: str | None = None,                    use_sample_dataset: bool) -> int:     ...     target_company = "Dify"  # safe fallback     try:         target_company = target_override or load_pipeline_config(config_path).target.name     except Exception as cfg_exc:         if target_override:             target_company = target_override         logger.warning(...)     ... ```  **验证**：  ```bash .venv\Scripts\python.exe -m marketsignal run --help # 应显示 --target 参数  .venv\Scripts\python.exe -m pytest tests/ -q --tb=short ```  ### 4.4 测试中 __import__("datetime") 用法  **问题**：`tests/api/test_app.py:102` 使用了 `__import__("datetime")` hack， 可读性差。  **改法**：在测试文件顶部正常 import：  ```python import datetime as _dt  # 然后把 __import__("datetime").datetime.utcnow() 改为 _dt.datetime.utcnow() # （或更好的 _dt.datetime.now(_dt.timezone.utc)，与 Task 1 一致） ```  **验证**：  ```bash grep -rn "__import__" tests/ --include="*.py" # 应为 0 ``` ---  ## Task 5: 文档更新 + 最终验证  ### 5.1 更新 README.md  在 API 端点表中新增：  ``` DELETE /runs/{run_id}  | 删除指定 crawl run 及其关联的 eval runs ```  ### 5.2 更新 .env.example  确认新增的环境变量已记录：  ```env # CORS origins (comma-separated) # CORS_ORIGINS=http://localhost:8501,http://localhost:3000 ```  ### 5.3 最终验证清单  ```bash # 1. 全量测试通过 .venv\Scripts\python.exe -m pytest tests/ -v --tb=short # 期望：171+ passed（新增的测试也通过）  # 2. 无 utcnow 残留（base.py 函数定义除外） grep -rn "\.utcnow()" src/marketsignal/ --include="*.py" | grep -v "def utcnow" # 期望：0  # 3. 3 处 except 已收窄 grep -n "except Exception" src/marketsignal/normalization/content_extractor.py grep -n "except Exception" src/marketsignal/rag/vector_store.py grep -n "except Exception" src/marketsignal/scheduler.py # 期望：均为 0  # 4. CORS 环境变量可覆盖 CORS_ORIGINS="http://test.com" .venv\Scripts\python.exe -c \   "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)" # 期望：['http://test.com']  # 5. DELETE 端点存在 .venv\Scripts\python.exe -c " from marketsignal.api.app import create_app app = create_app() routes = [r.methods for r in app.routes if hasattr(r, 'methods')] print(routes) " # 期望：某条路由包含 DELETE  # 6. --target 参数存在 .venv\Scripts\python.exe -m marketsignal run --help # 期望：显示 --target 参数  # 7. 测试中无 __import__ grep -rn "__import__" tests/ --include="*.py" # 期望：0  # 8. ruff 检查 .venv\Scripts\python.exe -m ruff check src tests # 期望：0 errors（warnings 可接受） ```  ---  ## 代码规范（同 V1/V2）  1. 所有文件有 module docstring 2. 所有 public 函数有 type hints + docstring 3. 配置从 Settings 读取，不硬编码 4. ID 生成用 `models.base.new_id()` 5. DB 操作用依赖注入 6. LLM 调用用 `utils.llm.get_llm()` 7. 异步函数用 `async def`，不在异步上下文中 `asyncio.run()` 8. 日志用 loguru，不用 print 9. 新增测试覆盖每个改动 10. 一个 commit，消息格式：`feat(v3): utcnow migration, except narrowing, CORS env, DELETE endpoint, --target CLI`
+# SignalPulse — Codex V3 改进执行文档
+
+> **生成时间**：2026-06-24
+> **项目路径**：D:\新项目
+> **前序**：V1（API/UI/测试 57→154）+ V2（CORS/except/prompt/LRU，测试 154→171）
+> **本轮目标**：修复 V2 遗留问题 + 进一步优化，共 5 个 Task
+> **执行顺序**：Task 1 → Task 5，严格按序
+
+---
+
+## Task 1: 统一 datetime.utcnow() → datetime.now(UTC)
+
+### 1.1 问题
+
+全项目有 **21 处** `datetime.utcnow()` 调用，分布在 13 个文件中。
+Python 3.12+ 已标记 `utcnow()` 为 deprecated。项目当前 CI 跑 3.10/3.11，
+但迟早会升级，现在统一改掉比以后批量改更安全。
+
+### 1.2 改法
+
+**第一步**：修改 `models/base.py` 的 `utcnow()` 函数（全局工具函数）
+
+```python
+# src/marketsignal/models/base.py — 找到 utcnow() 函数，改为：
+
+import datetime as _dt
+
+def utcnow() -> _dt.datetime:
+    """Return the current UTC time (timezone-aware)."""
+    return _dt.datetime.now(_dt.timezone.utc)
+```
+
+**第二步**：把以下 4 个文件中的直接 `datetime.utcnow()` 调用改为使用 `base.utcnow()`
+或 `datetime.now(timezone.utc)`（优先用 base.utcnow 保持一致性）：
+
+| 文件 | 行 | 当前代码 | 改为 |
+|---|---|---|---|
+| `api/routes/runs.py` | 143 | `_dt.datetime.utcnow()` | `from marketsignal.models.base import utcnow` 然后 `utcnow()` |
+| `api/routes/runs.py` | 151 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `api/routes/runs.py` | 163 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `services/sample_loader.py` | 50 | `_dt.datetime.utcnow()` | `from marketsignal.models.base import utcnow` 然后 `utcnow()` |
+| `agents/nodes/finalize.py` | 20 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `agents/nodes/load_config.py` | 27 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `agents/nodes/load_sample.py` | 38-39 | `_dt.datetime.utcnow()` | `utcnow()` |
+
+**第三步**：对不使用 `_dt.datetime.utcnow()` 的变体，直接替换表达式：
+
+| 文件 | 行 | 当前 | 改为 |
+|---|---|---|---|
+| `agents/nodes/generate_weekly_report.py` | 52 | `datetime.utcnow().date()` | `datetime.now(timezone.utc).date()` |
+| `ingestion/fetch_github.py` | 50 | `_dt.datetime.utcnow().timestamp()` | `_dt.datetime.now(_dt.timezone.utc).timestamp()` |
+| `ingestion/fetch_github.py` | 69 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `ingestion/fetch_rss.py` | 33 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `ingestion/fetch_webpage.py` | 46 | `_dt.datetime.utcnow()` | `utcnow()` |
+| `evals/eval_runner.py` | 44 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |
+| `ingestion/health_check.py` | 28 | `_dt.datetime.utcnow().isoformat()` | `_dt.datetime.now(_dt.timezone.utc).isoformat()` |
+| `utils/tracing.py` | 160 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |
+| `utils/tracing.py` | 192 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |
+| `utils/tracing.py` | 219 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |
+| `utils/tracing.py` | 234 | `datetime.utcnow().isoformat()` | `datetime.now(timezone.utc).isoformat()` |
+
+### 1.3 验证
+
+```bash
+cd D:\新项目
+.venv\Scripts\python.exe -m pytest tests/ -q --tb=short
+# 171 passed
+
+# 确认无残留 utcnow
+grep -rn "\.utcnow()" src/marketsignal/ --include="*.py"
+# 仅 base.py 中的函数定义保留，其他应为 0
+```
+---
+
+## Task 2: 收窄 3 处宽泛 except Exception
+
+### 2.1 问题
+
+V2 修复了 `except Exception: pass` 的 5 处，但以下 3 处改为加了 `logger`
+却没收窄异常类型。它们仍然会吞掉意外异常（如 MemoryError、KeyboardInterrupt
+不应被捕获的场景）。
+
+### 2.2 具体改动
+
+**文件：`normalization/content_extractor.py:75`**
+
+```python
+# 当前
+except Exception as exc:
+    logger.debug("content_extractor: language detect failed, default to en: {}", exc)
+    language = "en"
+
+# 改为
+from langdetect.lang_detect_exception import LangDetectException
+
+except LangDetectException as exc:
+    logger.debug("content_extractor: language detect failed, default to en: {}", exc)
+    language = "en"
+```
+
+**文件：`rag/vector_store.py:109`**
+
+```python
+# 当前
+except Exception as exc:  # noqa: BLE001
+    logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc)
+
+# 改为
+except (ValueError, chromadb.errors.ChromaError) as exc:
+    logger.debug("vector_store: delete_collection failed (collection may not exist yet): {}", exc)
+```
+
+注意：需要确认 `chromadb.errors.ChromaError` 的实际 import 路径。
+如果 chromadb 版本没有 `chromadb.errors`，则改为 `except Exception as exc`
+保留但添加注释说明原因。
+
+**文件：`scheduler.py:161`**
+
+```python
+# 当前
+except Exception as exc:  # noqa: BLE001
+    logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc)
+
+# 改为
+except (KeyError, JobLookupError) as exc:
+    logger.warning("scheduler: remove_job failed for job_id={}: {}", job_id, exc)
+```
+
+注意：`JobLookupError` 来自 `apscheduler.jobstores.base`，
+需要在文件顶部加 `from apscheduler.jobstores.base import JobLookupError`。
+如果 APScheduler 版本不同，用对应的 import 路径。
+
+### 2.3 保留不动的 except（已确认合理）
+
+| 文件 | 原因 |
+|---|---|
+| `db/session.py:44` — `except Exception:` | DB 事务 rollback 安全网，必须兜底 |
+| `api/routes/ws.py:159,164` — `except Exception:` | WebSocket 错误边界，必须兜底 |
+| `cli.py:113` — `except Exception as exc:` | CLI 主循环兜底，合理 |
+| `utils/tracing.py:229` — `except Exception as exc:` | trace_node 装饰器错误边界，会 re-raise |
+| `ui/components/sidebar.py:50,62` — `except Exception as exc:` | UI 组件容错，合理 |
+
+### 2.4 验证
+
+```bash
+.venv\Scripts\python.exe -m pytest tests/ -q --tb=short
+# 171+ passed
+
+# 确认 3 处已收窄
+grep -n "except Exception" src/marketsignal/normalization/content_extractor.py
+# 应为 0（改为 LangDetectException）
+
+grep -n "except Exception" src/marketsignal/rag/vector_store.py
+# 应为 0 或只剩有 noqa 注释的合理兜底
+
+grep -n "except Exception" src/marketsignal/scheduler.py
+# 应为 0（改为具体异常）
+```
+
+---
+
+## Task 3: CORS_ORIGINS 支持环境变量覆盖
+
+### 3.1 问题
+
+`settings.py` 的注释写了 "Override via the CORS_ORIGINS env var"，
+但 `pydantic-settings` 对 `list[str]` 类型的环境变量需要 JSON 格式输入，
+用户直接设 `CORS_ORIGINS=http://localhost:8501` 会解析失败。
+
+### 3.2 改法
+
+**文件：`config/settings.py`**
+
+```python
+# 当前
+cors_origins: list[str] = [
+    "http://localhost:8501",
+    "http://localhost:3000",
+    "http://127.0.0.1:8501",
+    "http://127.0.0.1:3000",
+]
+
+# 改为：用逗号分隔的字符串，pydantic-settings 自动解析为 list
+cors_origins: list[str] = Field(
+    default=[
+        "http://localhost:8501",   # Streamlit dev
+        "http://localhost:3000",   # next.js / react dev
+        "http://127.0.0.1:8501",
+        "http://127.0.0.1:3000",
+    ],
+    description="Allowed CORS origins. Set via CORS_ORIGINS env var (comma-separated).",
+)
+```
+
+**同时在 `.env.example` 末尾添加**：
+
+```env
+# CORS origins (comma-separated). Default: localhost:8501,localhost:3000
+# CORS_ORIGINS=http://localhost:8501,http://localhost:3000
+```
+
+### 3.3 验证
+
+```bash
+# 测试默认值
+.venv\Scripts\python.exe -c "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)"
+# 应输出默认列表
+
+# 测试环境变量覆盖
+CORS_ORIGINS="http://example.com,http://other.com" .venv\Scripts\python.exe -c \
+  "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)"
+# 应输出 ['http://example.com', 'http://other.com']
+
+.venv\Scripts\python.exe -m pytest tests/ -q --tb=short
+```
+---
+
+## Task 4: 新增推荐优化
+
+### 4.1 API 缺少 DELETE 端点
+
+**问题**：API 没有任何删除端点，无法清理测试数据或过期 run。
+
+**改法**：在 `api/routes/runs.py` 新增一个 DELETE 端点：
+
+```python
+@router.delete("/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_run(run_id: str, session: Session = Depends(get_db)) -> None:
+    """Delete a crawl run and its associated eval runs."""
+    run = session.get(CrawlRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
+    # Cascade delete associated eval runs
+    session.query(EvalRun).filter_by(crawl_run_id=run_id).delete()
+    session.delete(run)
+    session.flush()
+```
+
+**验证**：
+
+```bash
+.venv\Scripts\python.exe -m pytest tests/api/test_app.py -q --tb=short
+# 新增一个测试：POST /runs → GET /runs/{id} → DELETE /runs/{id} → GET /runs/{id} 返回 404
+```
+
+### 4.2 RunCreateRequest 缺少 target_company 字段
+
+**问题**：`POST /runs` 的请求体没有 `target_company` 字段，
+API 调用者无法指定分析目标，只能依赖 YAML config 里的默认值。
+
+**改法**：在 `api/routes/runs.py` 的 `RunCreateRequest` 中新增字段：
+
+```python
+class RunCreateRequest(BaseModel):
+    """Body for ``POST /runs``."""
+
+    config_path: str = Field(
+        default="configs/competitors.ai-agent.yaml",
+        description="Path to the competitor YAML config.",
+    )
+    target_company: str | None = Field(
+        default=None,
+        description="Override the target company name from the config. "
+        "If omitted, the value from the YAML config is used.",
+    )
+    use_sample_dataset: bool = Field(
+        default=False,
+        description="Skip fetch / LLM and use the bundled sample dataset.",
+    )
+    triggered_by: str = Field(default="api", max_length=64)
+```
+
+然后在 `_execute_pipeline_async` 中使用：
+
+```python
+def _execute_pipeline_async(
+    run_id: str, config_path: str, target_company_override: str | None,
+    use_sample_dataset: bool,
+) -> None:
+    ...
+    target_company = "Dify"  # safe fallback
+    try:
+        cfg = load_pipeline_config(config_path)
+        target_company = target_company_override or cfg.target.name
+    except Exception as cfg_exc:
+        if target_company_override:
+            target_company = target_company_override
+        logger.warning(...)
+    ...
+```
+
+`create_run` 调用处同步更新：
+
+```python
+background.add_task(
+    _execute_pipeline_async, run_id, body.config_path,
+    body.target_company, body.use_sample_dataset,
+)
+```
+
+**验证**：
+
+```bash
+.venv\Scripts\python.exe -m pytest tests/api/test_app.py -q --tb=short
+# 新增测试：POST /runs with target_company="Coze" → 确认 pipeline 收到正确的 target
+```
+
+### 4.3 CLI run 命令增加 --target 参数
+
+**问题**：CLI `run` 命令没有 `--target` 参数，无法从命令行覆盖分析目标。
+
+**改法**：在 `cli.py` 的 `run` subparser 中新增参数：
+
+```python
+run.add_argument(
+    "--target",
+    default=None,
+    help="Override the target company name (default: read from config YAML)",
+)
+```
+
+在 `_run_pipeline` 中使用：
+
+```python
+def _run_pipeline(config_path: str, *, target_override: str | None = None,
+                   use_sample_dataset: bool) -> int:
+    ...
+    target_company = "Dify"  # safe fallback
+    try:
+        target_company = target_override or load_pipeline_config(config_path).target.name
+    except Exception as cfg_exc:
+        if target_override:
+            target_company = target_override
+        logger.warning(...)
+    ...
+```
+
+**验证**：
+
+```bash
+.venv\Scripts\python.exe -m marketsignal run --help
+# 应显示 --target 参数
+
+.venv\Scripts\python.exe -m pytest tests/ -q --tb=short
+```
+
+### 4.4 测试中 __import__("datetime") 用法
+
+**问题**：`tests/api/test_app.py:102` 使用了 `__import__("datetime")` hack，
+可读性差。
+
+**改法**：在测试文件顶部正常 import：
+
+```python
+import datetime as _dt
+
+# 然后把 __import__("datetime").datetime.utcnow() 改为 _dt.datetime.utcnow()
+# （或更好的 _dt.datetime.now(_dt.timezone.utc)，与 Task 1 一致）
+```
+
+**验证**：
+
+```bash
+grep -rn "__import__" tests/ --include="*.py"
+# 应为 0
+```
+---
+
+## Task 5: 文档更新 + 最终验证
+
+### 5.1 更新 README.md
+
+在 API 端点表中新增：
+
+```
+DELETE /runs/{run_id}  | 删除指定 crawl run 及其关联的 eval runs
+```
+
+### 5.2 更新 .env.example
+
+确认新增的环境变量已记录：
+
+```env
+# CORS origins (comma-separated)
+# CORS_ORIGINS=http://localhost:8501,http://localhost:3000
+```
+
+### 5.3 最终验证清单
+
+```bash
+# 1. 全量测试通过
+.venv\Scripts\python.exe -m pytest tests/ -v --tb=short
+# 期望：171+ passed（新增的测试也通过）
+
+# 2. 无 utcnow 残留（base.py 函数定义除外）
+grep -rn "\.utcnow()" src/marketsignal/ --include="*.py" | grep -v "def utcnow"
+# 期望：0
+
+# 3. 3 处 except 已收窄
+grep -n "except Exception" src/marketsignal/normalization/content_extractor.py
+grep -n "except Exception" src/marketsignal/rag/vector_store.py
+grep -n "except Exception" src/marketsignal/scheduler.py
+# 期望：均为 0
+
+# 4. CORS 环境变量可覆盖
+CORS_ORIGINS="http://test.com" .venv\Scripts\python.exe -c \
+  "from marketsignal.config.settings import Settings; s=Settings(); print(s.cors_origins)"
+# 期望：['http://test.com']
+
+# 5. DELETE 端点存在
+.venv\Scripts\python.exe -c "
+from marketsignal.api.app import create_app
+app = create_app()
+routes = [r.methods for r in app.routes if hasattr(r, 'methods')]
+print(routes)
+"
+# 期望：某条路由包含 DELETE
+
+# 6. --target 参数存在
+.venv\Scripts\python.exe -m marketsignal run --help
+# 期望：显示 --target 参数
+
+# 7. 测试中无 __import__
+grep -rn "__import__" tests/ --include="*.py"
+# 期望：0
+
+# 8. ruff 检查
+.venv\Scripts\python.exe -m ruff check src tests
+# 期望：0 errors（warnings 可接受）
+```
+
+---
+
+## 代码规范（同 V1/V2）
+
+1. 所有文件有 module docstring
+2. 所有 public 函数有 type hints + docstring
+3. 配置从 Settings 读取，不硬编码
+4. ID 生成用 `models.base.new_id()`
+5. DB 操作用依赖注入
+6. LLM 调用用 `utils.llm.get_llm()`
+7. 异步函数用 `async def`，不在异步上下文中 `asyncio.run()`
+8. 日志用 loguru，不用 print
+9. 新增测试覆盖每个改动
+10. 一个 commit，消息格式：`feat(v3): utcnow migration, except narrowing, CORS env, DELETE endpoint, --target CLI`

@@ -1,1 +1,374 @@
-# SignalPulse V5 执行计划：从"能跑"到"能面试演示"  > **生成时间**：2026-06-27 > **项目路径**：D:\SignalPulse（竞品调研） > **目标**：让项目在面试现场 5 分钟内稳定演示完整流程，且代码质量经得起追问 > **当前状态**：V4 已完成（Dashboard + i18n + 暗色主题 + 图表 + 竞品管理 + 运维脚本），171 测试全绿  ---  ## 当前问题诊断  | # | 问题 | 严重度 | 影响 | |---|------|--------|------| | 1 | **Demo 脚本缺失** — README 提到 `docs/demo-script.md` 但文件不存在 | P0 | 面试官无法理解演示流程 | | 2 | **新模块无测试** — notify/、diff.py、export.py、scheduling.py、share.py、competitor_overview.py 共 733 行零测试 | P0 | 代码不可信，面试追问会露馅 | | 3 | **Scheduling 是空壳** — 只写 YAML，没有实际执行 cron 的后端 | P1 | 功能不可用，演示时尴尬 | | 4 | **Share 是空壳** — 只生成 HTML 文件到本地目录，没有真正的分享机制 | P1 | 同上 | | 5 | **Export 依赖未声明** — export.py 用了 fpdf2 和 openpyxl，但 pyproject.toml 没列 | P1 | import 就报错 | | 6 | **competitor_overview 的 pie chart 变量名冲突** — `type_mix` 解构用 `t` 覆盖了 i18n 的 `t` | P1 | 运行时 i18n 失效 | | 7 | **README 过时** — 仍引用 marketsignal 旧包名，缺少 V4 新功能说明 | P1 | 第一印象差 | | 8 | **.env.example 过时** — 缺少 V4 新增的环境变量（LLM_PROVIDER, LLM_MODEL 等） | P2 | 新人无法正确配置 | | 9 | **Dockerfile 未更新** — 仍用旧包名，缺少 Streamlit 端口暴露 | P2 | Docker 部署不可用 | | 10 | **架构文档过时** — docs/architecture.md 未反映 V4 的 UI 组件和 notify 模块 | P2 | 文档与代码不一致 |  ---  ## Task 1: 补齐新模块的单元测试（P0）  ### 1.1 目标  为 V4 新增的 6 个模块补测试，目标覆盖率 > 80%。  ### 1.2 需要测试的模块  | 模块 | 行数 | 测试文件 | 关键测试点 | |------|------|----------|-----------| | `reporting/diff.py` | 110 | `tests/reporting/test_diff.py` | compute_diff 正常/空数据/单侧数据 | | `reporting/export.py` | 159 | `tests/reporting/test_export.py` | export_pdf / export_xlsx 生成文件、空报告处理 | | `notify/base.py` + `feishu.py` + `email_sender.py` | 171 | `tests/notify/test_notify.py` | send 方法 mock、webhook 格式、缺少配置时跳过 | | `ui/components/scheduling.py` | 98 | `tests/ui/test_scheduling.py` | _load/_save YAML、form 提交、删除任务 | | `ui/components/share.py` | 108 | `tests/ui/test_share.py` | _render_html 输出、_list_reports、下载按钮 | | `ui/components/competitor_overview.py` | 87 | `tests/ui/test_competitor_overview.py` | _companies_with_stats 查询、空数据 |  ### 1.3 规范  - 每个测试文件开头有 module docstring - 使用 `monkeypatch` + `setenv("")` 覆盖 `.env` 中的 API key（参考 `test_llm_providers.py` 的修法） - 涉及 DB 的测试用 `tmp_data_dir` fixture（已有） - 涉及 Streamlit 的测试用 `pytest-mock` 或直接测纯逻辑函数（不依赖 `st` 对象的函数优先测） - 不要 mock 内部函数，mock 外部依赖（DB session、HTTP 请求、文件系统）  ### 1.4 验证  ```bash python -m pytest tests/ -q --tb=short # 全绿，且新增测试数 ≥ 20 ```  ---  ## Task 2: 修 competitor_overview 变量名冲突 + Export 依赖声明（P1）  ### 2.1 变量名冲突  `competitor_overview.py:48` 的列表推导：  ```python "type_mix": [(t or "unknown", int(n)) for t, n in type_rows], ```  这里的 `t` 覆盖了顶部 `from signalpulse.ui.i18n import t`。修法：改解构变量名：  ```python "type_mix": [(sig_type or "unknown", int(n)) for sig_type, n in type_rows], ```  ### 2.2 Export 依赖  在 `pyproject.toml` 的 `dependencies` 中添加：  ```toml "fpdf2>=2.7", "openpyxl>=3.1", ```  ### 2.3 验证  ```bash python -c "from signalpulse.reporting.export import export_pdf, export_xlsx; print('OK')" python -c "from signalpulse.ui.components.competitor_overview import render_competitor_overview; print('OK')" ```  ---  ## Task 3: 写 Demo 演示脚本（P0）  ### 3.1 目标  创建 `docs/demo-script.md`，让任何人（包括面试官）5 分钟内理解并跑通完整演示。  ### 3.2 内容结构  ```markdown # SignalPulse 5 分钟演示脚本  ## 前置条件 - Python 3.11+ - .env 已配置 OPENAI_API_KEY（或使用 sample 数据集免 key） - 已运行 `pip install -e .`  ## 演示步骤  ### Step 1: 启动 UI（30 秒） ```bash python -m streamlit run src/signalpulse/ui/app.py ``` - 展示 Onboarding 引导卡片 - 展示 9 个 Tab 的布局  ### Step 2: 用样例数据跑一次 Pipeline（2 分钟） - 侧边栏选择 "使用样例数据集" - 点击 "运行管道" - 观察进度条逐步推进 - Dashboard 自动刷新显示数据  ### Step 3: 查看 Dashboard（30 秒） - 4 个 metric 卡片 - 信号趋势折线图 - 信号类型分布饼图  ### Step 4: 查看竞品概览（30 秒） - 每个竞品一张卡片 - 信号数 + 最新发现 + 类型分布  ### Step 5: 查看周报 & Battlecard（30 秒） - Weekly report tab：Markdown 渲染的周报 - Battlecard tab：竞品卡片 + 雷达图  ### Step 6: 对比两次运行（30 秒） - Compare runs tab：选两次运行，看 diff  ### Step 7: 评估指标（30 秒） - Eval metrics tab：引用覆盖率、去重率等  ### Step 8: 切换语言（10 秒） - 侧边栏切换 English/中文  ## 常见问题 - Q: 没有 API key 怎么办？ A: 勾选"使用样例数据集"即可免 key 运行 - Q: 端口被占用？ A: `--server.port 8502` ```  ### 3.3 验证  按脚本步骤实际走一遍，确认每步都能成功。  ---  ## Task 4: 更新 README + .env.example + Dockerfile（P1）  ### 4.1 README.md 更新  需要修改的内容：  1. **包名**：所有 `marketsignal` → `signalpulse` 2. **特性列表**：新增 V4 特性    - 🌐 中英文切换（i18n）    - 📊 Dashboard 首页（metric 卡片 + 趋势图 + 分布图）    - 🏢 竞品概览卡片    - ⚔️ 竞品对比（run diff）    - 📤 报告分享（HTML 导出）    - ⏰ 定时调度 3. **安装步骤**：更新为 `pip install -e ".[dev]"` 4. **截图占位**：添加 UI 截图位置（后续补真实截图） 5. **技术栈**：确认列出所有实际使用的库  ### 4.2 .env.example 更新  当前缺少的变量：  ```env # LLM Provider (openai / anthropic / deepseek / qwen / ollama / gemini / custom) LLM_PROVIDER=openai LLM_MODEL=gpt-4o-mini  # Custom provider (if LLM_PROVIDER=custom) LLM_BASE_URL= LLM_API_KEY=  # DeepSeek DEEPSEEK_API_KEY= DEEPSEEK_BASE_URL=https://api.deepseek.com  # Qwen (DashScope) QWEN_API_KEY= QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  # Gemini GEMINI_API_KEY=  # Ollama (local) OLLAMA_BASE_URL=http://localhost:11434/v1  # Notification FEISHU_WEBHOOK_URL= FEISHU_WEBHOOK_SECRET= SMTP_HOST= SMTP_PORT=587 SMTP_USER= SMTP_PASSWORD= NOTIFY_FROM_EMAIL= NOTIFY_TO_EMAILS= ```  ### 4.3 Dockerfile 更新  - 基础镜像：`python:3.11-slim` - 包名：`signalpulse` 而非 `marketsignal` - 暴露端口：`8000`（API）+ `8501`（Streamlit） - 添加 Streamlit 启动命令  ### 4.4 验证  ```bash # README 中的安装步骤能跑通 pip install -e ".[dev]" python -m pytest tests/ -q  # .env.example 中的变量与 settings.py 一致 python -c "from signalpulse.config.settings import Settings; s=Settings(); print(sorted(s.model_fields.keys()))" ```  ---  ## Task 5: Scheduling 后端实现（P1）  ### 5.1 当前问题  `scheduling.py` 只写 YAML，没有实际执行。需要：  1. 一个后台 scheduler 进程读取 `schedules.yaml` 并按 cron 触发 pipeline 2. UI 上显示"上次运行时间"和"下次运行时间" 3. 运行完成后更新 `last_run` 字段  ### 5.2 实现方案  **新增文件**：`src/signalpulse/scheduler.py`（已存在但需重写）  ```python """Background scheduler: reads schedules.yaml, triggers pipeline runs.""" import time import subprocess import yaml from pathlib import Path from datetime import datetime from croniter import croniter  SCHEDULES_FILE = Path("schedules.yaml")  def run_scheduler(poll_interval: int = 60):     """Main loop: poll schedules.yaml every poll_interval seconds."""     while True:         jobs = _load_schedules()         now = datetime.now()         for job in jobs:             if not job.get("enabled"):                 continue             cron = job.get("cron", "")             if not cron:                 continue             try:                 next_time = croniter(cron, now).get_next(datetime)                 # If next run is within poll_interval, trigger                 if (next_time - now).total_seconds() <= poll_interval:                     _trigger_run(job)                     job["last_run"] = now.isoformat(timespec="seconds")                     _save_schedules(jobs)             except Exception:                 pass         time.sleep(poll_interval)  def _trigger_run(job: dict):     """Run the pipeline as a subprocess."""     config = job.get("config", "")     use_sample = job.get("use_sample", True)     cmd = ["python", "-m", "signalpulse", "run"]     if config:         cmd += ["--config", f"configs/{config}"]     if use_sample:         cmd += ["--use-sample-dataset"]     subprocess.run(cmd, check=False)  def _load_schedules() -> list[dict]:     if not SCHEDULES_FILE.exists():         return []     return list(yaml.safe_load(SCHEDULES_FILE.read_text(encoding="utf-8")) or [])  def _save_schedules(jobs: list[dict]):     SCHEDULES_FILE.write_text(         yaml.safe_dump(jobs, allow_unicode=True, sort_keys=False),         encoding="utf-8",     ) ```  ### 5.3 启动方式  在 `start_ui.ps1` 中添加 scheduler 后台进程：  ```powershell Start-Process -FilePath ".venv\Scripts\python.exe" -ArgumentList "-m", "signalpulse.scheduler" -WindowStyle Hidden ```  ### 5.4 验证  ```bash # 手动创建一个每分钟运行的 schedule echo '- id: job-test   cron: "* * * * *"   config: competitors.ai-coding.yaml   use_sample: true   enabled: true' > schedules.yaml  # 启动 scheduler python -m signalpulse.scheduler  # 等待 1 分钟，检查 last_run 是否更新 cat schedules.yaml ```  ---  ## Task 6: 架构文档更新（P2）  ### 6.1 需要更新的文件  | 文件 | 需要添加的内容 | |------|---------------| | `docs/architecture.md` | UI 组件架构图（9 tabs）、notify 模块、scheduler 模块 | | `docs/architecture_decisions.md` | ADR: i18n 方案选择、ADR: scheduling 方案选择 | | `docs/database.md` | 确认所有 model 都有文档 |  ### 6.2 重点  - 架构图要反映 V4 的 9-tab UI 结构 - 每个新模块（notify、scheduler、diff、export、share）都要有简要说明 - ADR 要写"为什么选这个方案"而不是"选了什么"  ---  ## 执行顺序  ``` Task 2 (变量名冲突 + 依赖) → Task 1 (补测试) → Task 3 (Demo 脚本) → Task 4 (README/配置) → Task 5 (Scheduler) → Task 6 (文档) ```  **理由**： - Task 2 是 bug，先修 - Task 1 补测试，确保后续改动有安全网 - Task 3 Demo 脚本是面试刚需 - Task 4 更新文档，让项目第一印象好 - Task 5 Scheduler 是功能完善，优先级低于面试准备 - Task 6 架构文档最后补  ---  ## 代码规范（延续 V4）  1. 所有新增文件有 module docstring 2. 所有 public 函数有 type hints + docstring 3. 使用 `i18n.t()` 做文本国际化，不硬编码中英文 4. plotly 图表统一暗色主题：`template="plotly_dark"` 5. 新增依赖写进 `pyproject.toml` 6. 每完成一个 Task 跑一次 `python -m pytest tests/ -q --tb=short`，确保全绿 7. Commit 消息格式：`feat(v5): <描述>` 或 `fix(v5): <描述>`
+# SignalPulse V5 执行计划：从"能跑"到"能面试演示"
+
+> **生成时间**：2026-06-27
+> **项目路径**：D:\SignalPulse（竞品调研）
+> **目标**：让项目在面试现场 5 分钟内稳定演示完整流程，且代码质量经得起追问
+> **当前状态**：V4 已完成（Dashboard + i18n + 暗色主题 + 图表 + 竞品管理 + 运维脚本），171 测试全绿
+
+---
+
+## 当前问题诊断
+
+| # | 问题 | 严重度 | 影响 |
+|---|------|--------|------|
+| 1 | **Demo 脚本缺失** — README 提到 `docs/demo-script.md` 但文件不存在 | P0 | 面试官无法理解演示流程 |
+| 2 | **新模块无测试** — notify/、diff.py、export.py、scheduling.py、share.py、competitor_overview.py 共 733 行零测试 | P0 | 代码不可信，面试追问会露馅 |
+| 3 | **Scheduling 是空壳** — 只写 YAML，没有实际执行 cron 的后端 | P1 | 功能不可用，演示时尴尬 |
+| 4 | **Share 是空壳** — 只生成 HTML 文件到本地目录，没有真正的分享机制 | P1 | 同上 |
+| 5 | **Export 依赖未声明** — export.py 用了 fpdf2 和 openpyxl，但 pyproject.toml 没列 | P1 | import 就报错 |
+| 6 | **competitor_overview 的 pie chart 变量名冲突** — `type_mix` 解构用 `t` 覆盖了 i18n 的 `t` | P1 | 运行时 i18n 失效 |
+| 7 | **README 过时** — 仍引用 marketsignal 旧包名，缺少 V4 新功能说明 | P1 | 第一印象差 |
+| 8 | **.env.example 过时** — 缺少 V4 新增的环境变量（LLM_PROVIDER, LLM_MODEL 等） | P2 | 新人无法正确配置 |
+| 9 | **Dockerfile 未更新** — 仍用旧包名，缺少 Streamlit 端口暴露 | P2 | Docker 部署不可用 |
+| 10 | **架构文档过时** — docs/architecture.md 未反映 V4 的 UI 组件和 notify 模块 | P2 | 文档与代码不一致 |
+
+---
+
+## Task 1: 补齐新模块的单元测试（P0）
+
+### 1.1 目标
+
+为 V4 新增的 6 个模块补测试，目标覆盖率 > 80%。
+
+### 1.2 需要测试的模块
+
+| 模块 | 行数 | 测试文件 | 关键测试点 |
+|------|------|----------|-----------|
+| `reporting/diff.py` | 110 | `tests/reporting/test_diff.py` | compute_diff 正常/空数据/单侧数据 |
+| `reporting/export.py` | 159 | `tests/reporting/test_export.py` | export_pdf / export_xlsx 生成文件、空报告处理 |
+| `notify/base.py` + `feishu.py` + `email_sender.py` | 171 | `tests/notify/test_notify.py` | send 方法 mock、webhook 格式、缺少配置时跳过 |
+| `ui/components/scheduling.py` | 98 | `tests/ui/test_scheduling.py` | _load/_save YAML、form 提交、删除任务 |
+| `ui/components/share.py` | 108 | `tests/ui/test_share.py` | _render_html 输出、_list_reports、下载按钮 |
+| `ui/components/competitor_overview.py` | 87 | `tests/ui/test_competitor_overview.py` | _companies_with_stats 查询、空数据 |
+
+### 1.3 规范
+
+- 每个测试文件开头有 module docstring
+- 使用 `monkeypatch` + `setenv("")` 覆盖 `.env` 中的 API key（参考 `test_llm_providers.py` 的修法）
+- 涉及 DB 的测试用 `tmp_data_dir` fixture（已有）
+- 涉及 Streamlit 的测试用 `pytest-mock` 或直接测纯逻辑函数（不依赖 `st` 对象的函数优先测）
+- 不要 mock 内部函数，mock 外部依赖（DB session、HTTP 请求、文件系统）
+
+### 1.4 验证
+
+```bash
+python -m pytest tests/ -q --tb=short
+# 全绿，且新增测试数 ≥ 20
+```
+
+---
+
+## Task 2: 修 competitor_overview 变量名冲突 + Export 依赖声明（P1）
+
+### 2.1 变量名冲突
+
+`competitor_overview.py:48` 的列表推导：
+
+```python
+"type_mix": [(t or "unknown", int(n)) for t, n in type_rows],
+```
+
+这里的 `t` 覆盖了顶部 `from signalpulse.ui.i18n import t`。修法：改解构变量名：
+
+```python
+"type_mix": [(sig_type or "unknown", int(n)) for sig_type, n in type_rows],
+```
+
+### 2.2 Export 依赖
+
+在 `pyproject.toml` 的 `dependencies` 中添加：
+
+```toml
+"fpdf2>=2.7",
+"openpyxl>=3.1",
+```
+
+### 2.3 验证
+
+```bash
+python -c "from signalpulse.reporting.export import export_pdf, export_xlsx; print('OK')"
+python -c "from signalpulse.ui.components.competitor_overview import render_competitor_overview; print('OK')"
+```
+
+---
+
+## Task 3: 写 Demo 演示脚本（P0）
+
+### 3.1 目标
+
+创建 `docs/demo-script.md`，让任何人（包括面试官）5 分钟内理解并跑通完整演示。
+
+### 3.2 内容结构
+
+```markdown
+# SignalPulse 5 分钟演示脚本
+
+## 前置条件
+- Python 3.11+
+- .env 已配置 OPENAI_API_KEY（或使用 sample 数据集免 key）
+- 已运行 `pip install -e .`
+
+## 演示步骤
+
+### Step 1: 启动 UI（30 秒）
+```bash
+python -m streamlit run src/signalpulse/ui/app.py
+```
+- 展示 Onboarding 引导卡片
+- 展示 9 个 Tab 的布局
+
+### Step 2: 用样例数据跑一次 Pipeline（2 分钟）
+- 侧边栏选择 "使用样例数据集"
+- 点击 "运行管道"
+- 观察进度条逐步推进
+- Dashboard 自动刷新显示数据
+
+### Step 3: 查看 Dashboard（30 秒）
+- 4 个 metric 卡片
+- 信号趋势折线图
+- 信号类型分布饼图
+
+### Step 4: 查看竞品概览（30 秒）
+- 每个竞品一张卡片
+- 信号数 + 最新发现 + 类型分布
+
+### Step 5: 查看周报 & Battlecard（30 秒）
+- Weekly report tab：Markdown 渲染的周报
+- Battlecard tab：竞品卡片 + 雷达图
+
+### Step 6: 对比两次运行（30 秒）
+- Compare runs tab：选两次运行，看 diff
+
+### Step 7: 评估指标（30 秒）
+- Eval metrics tab：引用覆盖率、去重率等
+
+### Step 8: 切换语言（10 秒）
+- 侧边栏切换 English/中文
+
+## 常见问题
+- Q: 没有 API key 怎么办？ A: 勾选"使用样例数据集"即可免 key 运行
+- Q: 端口被占用？ A: `--server.port 8502`
+```
+
+### 3.3 验证
+
+按脚本步骤实际走一遍，确认每步都能成功。
+
+---
+
+## Task 4: 更新 README + .env.example + Dockerfile（P1）
+
+### 4.1 README.md 更新
+
+需要修改的内容：
+
+1. **包名**：所有 `marketsignal` → `signalpulse`
+2. **特性列表**：新增 V4 特性
+   - 🌐 中英文切换（i18n）
+   - 📊 Dashboard 首页（metric 卡片 + 趋势图 + 分布图）
+   - 🏢 竞品概览卡片
+   - ⚔️ 竞品对比（run diff）
+   - 📤 报告分享（HTML 导出）
+   - ⏰ 定时调度
+3. **安装步骤**：更新为 `pip install -e ".[dev]"`
+4. **截图占位**：添加 UI 截图位置（后续补真实截图）
+5. **技术栈**：确认列出所有实际使用的库
+
+### 4.2 .env.example 更新
+
+当前缺少的变量：
+
+```env
+# LLM Provider (openai / anthropic / deepseek / qwen / ollama / gemini / custom)
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+
+# Custom provider (if LLM_PROVIDER=custom)
+LLM_BASE_URL=
+LLM_API_KEY=
+
+# DeepSeek
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+
+# Qwen (DashScope)
+QWEN_API_KEY=
+QWEN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+
+# Gemini
+GEMINI_API_KEY=
+
+# Ollama (local)
+OLLAMA_BASE_URL=http://localhost:11434/v1
+
+# Notification
+FEISHU_WEBHOOK_URL=
+FEISHU_WEBHOOK_SECRET=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+NOTIFY_FROM_EMAIL=
+NOTIFY_TO_EMAILS=
+```
+
+### 4.3 Dockerfile 更新
+
+- 基础镜像：`python:3.11-slim`
+- 包名：`signalpulse` 而非 `marketsignal`
+- 暴露端口：`8000`（API）+ `8501`（Streamlit）
+- 添加 Streamlit 启动命令
+
+### 4.4 验证
+
+```bash
+# README 中的安装步骤能跑通
+pip install -e ".[dev]"
+python -m pytest tests/ -q
+
+# .env.example 中的变量与 settings.py 一致
+python -c "from signalpulse.config.settings import Settings; s=Settings(); print(sorted(s.model_fields.keys()))"
+```
+
+---
+
+## Task 5: Scheduling 后端实现（P1）
+
+### 5.1 当前问题
+
+`scheduling.py` 只写 YAML，没有实际执行。需要：
+
+1. 一个后台 scheduler 进程读取 `schedules.yaml` 并按 cron 触发 pipeline
+2. UI 上显示"上次运行时间"和"下次运行时间"
+3. 运行完成后更新 `last_run` 字段
+
+### 5.2 实现方案
+
+**新增文件**：`src/signalpulse/scheduler.py`（已存在但需重写）
+
+```python
+"""Background scheduler: reads schedules.yaml, triggers pipeline runs."""
+import time
+import subprocess
+import yaml
+from pathlib import Path
+from datetime import datetime
+from croniter import croniter
+
+SCHEDULES_FILE = Path("schedules.yaml")
+
+def run_scheduler(poll_interval: int = 60):
+    """Main loop: poll schedules.yaml every poll_interval seconds."""
+    while True:
+        jobs = _load_schedules()
+        now = datetime.now()
+        for job in jobs:
+            if not job.get("enabled"):
+                continue
+            cron = job.get("cron", "")
+            if not cron:
+                continue
+            try:
+                next_time = croniter(cron, now).get_next(datetime)
+                # If next run is within poll_interval, trigger
+                if (next_time - now).total_seconds() <= poll_interval:
+                    _trigger_run(job)
+                    job["last_run"] = now.isoformat(timespec="seconds")
+                    _save_schedules(jobs)
+            except Exception:
+                pass
+        time.sleep(poll_interval)
+
+def _trigger_run(job: dict):
+    """Run the pipeline as a subprocess."""
+    config = job.get("config", "")
+    use_sample = job.get("use_sample", True)
+    cmd = ["python", "-m", "signalpulse", "run"]
+    if config:
+        cmd += ["--config", f"configs/{config}"]
+    if use_sample:
+        cmd += ["--use-sample-dataset"]
+    subprocess.run(cmd, check=False)
+
+def _load_schedules() -> list[dict]:
+    if not SCHEDULES_FILE.exists():
+        return []
+    return list(yaml.safe_load(SCHEDULES_FILE.read_text(encoding="utf-8")) or [])
+
+def _save_schedules(jobs: list[dict]):
+    SCHEDULES_FILE.write_text(
+        yaml.safe_dump(jobs, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+```
+
+### 5.3 启动方式
+
+在 `start_ui.ps1` 中添加 scheduler 后台进程：
+
+```powershell
+Start-Process -FilePath ".venv\Scripts\python.exe" -ArgumentList "-m", "signalpulse.scheduler" -WindowStyle Hidden
+```
+
+### 5.4 验证
+
+```bash
+# 手动创建一个每分钟运行的 schedule
+echo '- id: job-test
+  cron: "* * * * *"
+  config: competitors.ai-coding.yaml
+  use_sample: true
+  enabled: true' > schedules.yaml
+
+# 启动 scheduler
+python -m signalpulse.scheduler
+
+# 等待 1 分钟，检查 last_run 是否更新
+cat schedules.yaml
+```
+
+---
+
+## Task 6: 架构文档更新（P2）
+
+### 6.1 需要更新的文件
+
+| 文件 | 需要添加的内容 |
+|------|---------------|
+| `docs/architecture.md` | UI 组件架构图（9 tabs）、notify 模块、scheduler 模块 |
+| `docs/architecture_decisions.md` | ADR: i18n 方案选择、ADR: scheduling 方案选择 |
+| `docs/database.md` | 确认所有 model 都有文档 |
+
+### 6.2 重点
+
+- 架构图要反映 V4 的 9-tab UI 结构
+- 每个新模块（notify、scheduler、diff、export、share）都要有简要说明
+- ADR 要写"为什么选这个方案"而不是"选了什么"
+
+---
+
+## 执行顺序
+
+```
+Task 2 (变量名冲突 + 依赖) → Task 1 (补测试) → Task 3 (Demo 脚本) → Task 4 (README/配置) → Task 5 (Scheduler) → Task 6 (文档)
+```
+
+**理由**：
+- Task 2 是 bug，先修
+- Task 1 补测试，确保后续改动有安全网
+- Task 3 Demo 脚本是面试刚需
+- Task 4 更新文档，让项目第一印象好
+- Task 5 Scheduler 是功能完善，优先级低于面试准备
+- Task 6 架构文档最后补
+
+---
+
+## 代码规范（延续 V4）
+
+1. 所有新增文件有 module docstring
+2. 所有 public 函数有 type hints + docstring
+3. 使用 `i18n.t()` 做文本国际化，不硬编码中英文
+4. plotly 图表统一暗色主题：`template="plotly_dark"`
+5. 新增依赖写进 `pyproject.toml`
+6. 每完成一个 Task 跑一次 `python -m pytest tests/ -q --tb=short`，确保全绿
+7. Commit 消息格式：`feat(v5): <描述>` 或 `fix(v5): <描述>`

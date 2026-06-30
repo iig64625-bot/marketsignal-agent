@@ -1,1 +1,83 @@
-"""Sidebar UI to view, add, and remove competitors from a config YAML.""" from __future__ import annotations  from pathlib import Path from typing import Any  import streamlit as st import yaml  from signalpulse.ui.i18n import t as _t   def _load(path: str) -> dict[str, Any]:     p = Path(path)     if not p.exists():         return {"target_company": {"name": "", "website": "", "description": ""}, "competitors": []}     with p.open("r", encoding="utf-8") as f:         return yaml.safe_load(f) or {}   def _save(path: str, data: dict[str, Any]) -> None:     p = Path(path)     p.parent.mkdir(parents=True, exist_ok=True)     tmp = p.with_suffix(p.suffix + ".tmp")     with tmp.open("w", encoding="utf-8") as f:         yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)     tmp.replace(p)   def render_competitor_manager(config_path: str) -> None:     """Render the competitor management UI inside the sidebar."""     st.markdown(f"### {_t('competitors')}")     cfg = _load(config_path)     competitors = list(cfg.get("competitors") or [])      # List + delete     if not competitors:         st.caption(f"_{_t('no_competitors')}_")     for i, comp in enumerate(competitors):         cols = st.columns([3, 1])         cols[0].markdown(             f"**{comp.get('name', '?')}**<br/><small>{comp.get('website') or '—'}</small>",             unsafe_allow_html=True,         )         if cols[1].button("X", key=f"cm-del-{i}-{comp.get('name','')}", help=_t("remove")):             competitors.pop(i)             cfg["competitors"] = competitors             _save(config_path, cfg)             st.rerun()         with st.expander(f"{_t('details')} - {comp.get('name','?')}", expanded=False):             for s in (comp.get("sources") or []):                 st.markdown(f"- `{s.get('type','?')}` {s.get('url','?')}")      st.markdown(f"**+ {_t('add_competitor')}**")     with st.form(f"cm-add-form-{config_path}", clear_on_submit=True):         new_name = st.text_input(_t("comp_name"), key="cm-name")         new_website = st.text_input(_t("website"), key="cm-web")         new_sources = st.text_area(             _t("sources_hint"),             key="cm-src",             placeholder="changelog|https://example.com/changelog\nwebsite|https://example.com",         )         if st.form_submit_button(_t("add")):             if not new_name.strip():                 st.error(_t("name_required"))             else:                 sources = []                 for line in (new_sources or "").splitlines():                     line = line.strip()                     if not line or "|" not in line:                         continue                     tp, u = line.split("|", 1)                     sources.append({"type": tp.strip(), "url": u.strip()})                 competitors.append(                     {"name": new_name.strip(), "website": new_website.strip(), "sources": sources}                 )                 cfg["competitors"] = competitors                 _save(config_path, cfg)                 st.success(f"{_t('added')}: {new_name}")                 st.rerun()   __all__ = ["render_competitor_manager"]
+"""Sidebar UI to view, add, and remove competitors from a config YAML."""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import streamlit as st
+import yaml
+
+from signalpulse.ui.i18n import t as _t
+
+
+def _load(path: str) -> dict[str, Any]:
+    p = Path(path)
+    if not p.exists():
+        return {"target_company": {"name": "", "website": "", "description": ""}, "competitors": []}
+    with p.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _save(path: str, data: dict[str, Any]) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    tmp.replace(p)
+
+
+def render_competitor_manager(config_path: str) -> None:
+    """Render the competitor management UI inside the sidebar."""
+    st.markdown(f"### {_t('competitors')}")
+    cfg = _load(config_path)
+    competitors = list(cfg.get("competitors") or [])
+
+    # List + delete
+    if not competitors:
+        st.caption(f"_{_t('no_competitors')}_")
+    for i, comp in enumerate(competitors):
+        cols = st.columns([3, 1])
+        cols[0].markdown(
+            f"**{comp.get('name', '?')}**<br/><small>{comp.get('website') or '—'}</small>",
+            unsafe_allow_html=True,
+        )
+        if cols[1].button("X", key=f"cm-del-{i}-{comp.get('name','')}", help=_t("remove")):
+            competitors.pop(i)
+            cfg["competitors"] = competitors
+            _save(config_path, cfg)
+            st.rerun()
+        with st.expander(f"{_t('details')} - {comp.get('name','?')}", expanded=False):
+            for s in (comp.get("sources") or []):
+                st.markdown(f"- `{s.get('type','?')}` {s.get('url','?')}")
+
+    st.markdown(f"**+ {_t('add_competitor')}**")
+    with st.form(f"cm-add-form-{config_path}", clear_on_submit=True):
+        new_name = st.text_input(_t("comp_name"), key="cm-name")
+        new_website = st.text_input(_t("website"), key="cm-web")
+        new_sources = st.text_area(
+            _t("sources_hint"),
+            key="cm-src",
+            placeholder="changelog|https://example.com/changelog\nwebsite|https://example.com",
+        )
+        if st.form_submit_button(_t("add")):
+            if not new_name.strip():
+                st.error(_t("name_required"))
+            else:
+                sources = []
+                for line in (new_sources or "").splitlines():
+                    line = line.strip()
+                    if not line or "|" not in line:
+                        continue
+                    tp, u = line.split("|", 1)
+                    sources.append({"type": tp.strip(), "url": u.strip()})
+                competitors.append(
+                    {"name": new_name.strip(), "website": new_website.strip(), "sources": sources}
+                )
+                cfg["competitors"] = competitors
+                _save(config_path, cfg)
+                st.success(f"{_t('added')}: {new_name}")
+                st.rerun()
+
+
+__all__ = ["render_competitor_manager"]

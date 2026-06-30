@@ -1,1 +1,49 @@
-"""Tests for the GitHub releases fetcher."""  from __future__ import annotations  import json from pathlib import Path from unittest.mock import AsyncMock  import pytest  from signalpulse.ingestion.fetch_github import fetch_github_releases, parse_repo_url   def test_parse_repo_url_accepts_https_and_ssh():     """Both ``https://`` and ``git@`` style URLs parse to the same (owner, repo)."""     assert parse_repo_url("https://github.com/owner/repo") == ("owner", "repo")     assert parse_repo_url("https://github.com/owner/repo.git") == ("owner", "repo")     assert parse_repo_url("https://github.com/owner/repo/") == ("owner", "repo")   def test_parse_repo_url_rejects_non_github():     import pytest as _p      with _p.raises(ValueError):         parse_repo_url("https://example.com/owner/repo")   @pytest.mark.asyncio async def test_fetch_github_releases_persists_json(tmp_path):     payload = [         {"tag_name": "v1.0", "name": "1.0", "body": "first", "html_url": "https://github.com/o/r/releases/tag/v1.0"},         {"tag_name": "v0.9", "name": "0.9", "body": "older", "html_url": "https://github.com/o/r/releases/tag/v0.9"},     ]     body = json.dumps(payload).encode("utf-8")     fake_client = AsyncMock()     fake_client.fetch_bytes = AsyncMock(return_value=body)  # type: ignore[method-assign]     docs = await fetch_github_releases(         "https://github.com/o/r",         source_id="s",         crawl_run_id="r",         client=fake_client,         raw_root=tmp_path,     )     assert len(docs) == 2     assert docs[0].url == "https://github.com/o/r/releases/tag/v1.0"     assert all(d.raw_text_path is not None for d in docs)     p = Path(docs[0].raw_text_path)  # type: ignore[arg-type]     assert p.exists()     assert json.loads(p.read_text(encoding="utf-8"))[0]["tag_name"] == "v1.0"
+﻿"""Tests for the GitHub releases fetcher."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock
+
+import pytest
+
+from signalpulse.ingestion.fetch_github import fetch_github_releases, parse_repo_url
+
+
+def test_parse_repo_url_accepts_https_and_ssh():
+    """Both ``https://`` and ``git@`` style URLs parse to the same (owner, repo)."""
+    assert parse_repo_url("https://github.com/owner/repo") == ("owner", "repo")
+    assert parse_repo_url("https://github.com/owner/repo.git") == ("owner", "repo")
+    assert parse_repo_url("https://github.com/owner/repo/") == ("owner", "repo")
+
+
+def test_parse_repo_url_rejects_non_github():
+    import pytest as _p
+
+    with _p.raises(ValueError):
+        parse_repo_url("https://example.com/owner/repo")
+
+
+@pytest.mark.asyncio
+async def test_fetch_github_releases_persists_json(tmp_path):
+    payload = [
+        {"tag_name": "v1.0", "name": "1.0", "body": "first", "html_url": "https://github.com/o/r/releases/tag/v1.0"},
+        {"tag_name": "v0.9", "name": "0.9", "body": "older", "html_url": "https://github.com/o/r/releases/tag/v0.9"},
+    ]
+    body = json.dumps(payload).encode("utf-8")
+    fake_client = AsyncMock()
+    fake_client.fetch_bytes = AsyncMock(return_value=body)  # type: ignore[method-assign]
+    docs = await fetch_github_releases(
+        "https://github.com/o/r",
+        source_id="s",
+        crawl_run_id="r",
+        client=fake_client,
+        raw_root=tmp_path,
+    )
+    assert len(docs) == 2
+    assert docs[0].url == "https://github.com/o/r/releases/tag/v1.0"
+    assert all(d.raw_text_path is not None for d in docs)
+    p = Path(docs[0].raw_text_path)  # type: ignore[arg-type]
+    assert p.exists()
+    assert json.loads(p.read_text(encoding="utf-8"))[0]["tag_name"] == "v1.0"

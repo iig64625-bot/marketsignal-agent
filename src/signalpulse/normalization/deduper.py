@@ -1,1 +1,38 @@
-"""Deduplicate normalized documents by content hash.""" from __future__ import annotations  import datetime as _dt from collections import defaultdict from collections.abc import Iterable  from loguru import logger  from signalpulse.models.normalized_document import NormalizedDocument   def deduplicate(docs: Iterable[NormalizedDocument]) -> list[NormalizedDocument]:     """Mark duplicate ``(company_id, content_hash)`` groups and keep the newest.      Each survivor gets a ``dedup_group`` set to the canonical hash so downstream     queries can filter dups easily. Duplicates (non-survivors) remain in the     returned list with their ``dedup_group`` left as ``None`` so the caller     can decide whether to drop them.     """     grouped: dict[tuple[str, str], list[NormalizedDocument]] = defaultdict(list)     for d in docs:         if d.content_hash:             grouped[(d.company_id, d.content_hash)].append(d)     removed = 0     for (_cid, h), group in grouped.items():         if len(group) == 1:             group[0].dedup_group = h             continue         group.sort(             key=lambda d: (d.published_at or d.created_at or _dt.datetime.min),             reverse=True,         )         group[0].dedup_group = h         removed += len(group) - 1     if removed:         logger.info("dedup removed {} duplicate docs", removed)     return list(docs)
+﻿"""Deduplicate normalized documents by content hash."""
+from __future__ import annotations
+
+import datetime as _dt
+from collections import defaultdict
+from collections.abc import Iterable
+
+from loguru import logger
+
+from signalpulse.models.normalized_document import NormalizedDocument
+
+
+def deduplicate(docs: Iterable[NormalizedDocument]) -> list[NormalizedDocument]:
+    """Mark duplicate ``(company_id, content_hash)`` groups and keep the newest.
+
+    Each survivor gets a ``dedup_group`` set to the canonical hash so downstream
+    queries can filter dups easily. Duplicates (non-survivors) remain in the
+    returned list with their ``dedup_group`` left as ``None`` so the caller
+    can decide whether to drop them.
+    """
+    grouped: dict[tuple[str, str], list[NormalizedDocument]] = defaultdict(list)
+    for d in docs:
+        if d.content_hash:
+            grouped[(d.company_id, d.content_hash)].append(d)
+    removed = 0
+    for (_cid, h), group in grouped.items():
+        if len(group) == 1:
+            group[0].dedup_group = h
+            continue
+        group.sort(
+            key=lambda d: (d.published_at or d.created_at or _dt.datetime.min),
+            reverse=True,
+        )
+        group[0].dedup_group = h
+        removed += len(group) - 1
+    if removed:
+        logger.info("dedup removed {} duplicate docs", removed)
+    return list(docs)

@@ -1,1 +1,43 @@
-# SignalPulse Agent — FastAPI + Streamlit # Stage 1: builder (install deps with build tools) FROM python:3.11-slim AS builder  WORKDIR /build  # System deps for building wheels (sqlite, lxml, onnx, etc.) RUN apt-get update && apt-get install -y --no-install-recommends \     build-essential gcc curl \     && rm -rf /var/lib/apt/lists/*  # Install Python deps first for better layer caching COPY pyproject.toml ./ RUN pip install --no-cache-dir --upgrade pip \     && pip install --no-cache-dir -e ".[dev,pdf]"  # Stage 2: runtime (slim, no build tools) FROM python:3.11-slim  WORKDIR /app  # Minimal runtime deps RUN apt-get update && apt-get install -y --no-install-recommends \     curl \     && rm -rf /var/lib/apt/lists/* \     && useradd --create-home --shell /bin/bash signalpulse  # Copy installed packages + source from builder COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages COPY --from=builder /usr/local/bin /usr/local/bin COPY . /app  ENV PYTHONPATH=/app/src \     PYTHONUNBUFFERED=1 \     STREAMLIT_BROWSER_GATHER_USAGE_STATS=false  USER signalpulse  # Expose both API (8000) and Streamlit (8501) EXPOSE 8000 8501  # Default: start FastAPI. Override with `streamlit run ...` to start the UI. CMD ["uvicorn", "signalpulse.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+# SignalPulse Agent — FastAPI + Streamlit
+# Stage 1: builder (install deps with build tools)
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# System deps for building wheels (sqlite, lxml, onnx, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps first for better layer caching
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -e ".[dev,pdf]"
+
+# Stage 2: runtime (slim, no build tools)
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Minimal runtime deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /bin/bash signalpulse
+
+# Copy installed packages + source from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY . /app
+
+ENV PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+USER signalpulse
+
+# Expose both API (8000) and Streamlit (8501)
+EXPOSE 8000 8501
+
+# Default: start FastAPI. Override with `streamlit run ...` to start the UI.
+CMD ["uvicorn", "signalpulse.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
