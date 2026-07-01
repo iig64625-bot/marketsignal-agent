@@ -190,6 +190,14 @@ def render_dashboard() -> None:
         status_emoji = "🔘"
         delta_str = ""
 
+    # Empty-state CTA when no runs exist
+    if not runs:
+        st.info(t("empty_state_cta"))
+        if st.button(t("onboarding_cta_sample"), type="primary", key="dash_empty_run"):
+            st.session_state["trigger_sample_run"] = True
+            st.rerun()
+        return
+
     avg_cov = _citation_coverage_avg()
 
     c1, c2, c3, c4 = st.columns(4)
@@ -209,6 +217,12 @@ def render_dashboard() -> None:
         df_melt = df_eval.melt(id_vars=["run_label"],
                                 value_vars=["citation_coverage", "unsupported_claim_rate", "dedup_rate"],
                                 var_name="metric", value_name="value")
+        _METRIC_LABELS = {
+            "citation_coverage": t("eval_citation_coverage"),
+            "unsupported_claim_rate": t("eval_unsupported_rate"),
+            "dedup_rate": t("eval_dedup_rate"),
+        }
+        df_melt["metric"] = df_melt["metric"].map(_METRIC_LABELS)
         if HAS_PLOTLY:
             fig = px.line(df_melt, x="run_label", y="value", color="metric", markers=True)
             fig.update_layout(template="plotly_dark", height=320, margin=dict(l=10, r=10, t=20, b=10))
@@ -279,13 +293,18 @@ def render_dashboard() -> None:
     with fc3:
         type_opts = ["__all__"] + sorted(all_types)
         sel_type = st.selectbox(t("signal_type_filter"), type_opts,
-                                format_func=lambda x: t("all_types") if x == "__all__" else x,
+                                format_func=lambda x: t("all_types") if x == "__all__" else label_signal_type(x),
                                 index=0, key="dash_type")
     with fc4:
         comp_opts = ["__all__"] + sorted(all_companies)
+        # Pre-select competitor from overview card click
+        pre_comp = st.session_state.pop("filter_competitor", None)
+        default_comp = 0
+        if pre_comp and pre_comp in comp_opts:
+            default_comp = comp_opts.index(pre_comp)
         sel_comp = st.selectbox(t("competitor_filter"), comp_opts,
                                 format_func=lambda x: t("all_competitors") if x == "__all__" else x,
-                                index=0, key="dash_comp")
+                                index=default_comp, key="dash_comp")
 
     since = None
     if time_choice == "7d":
@@ -304,6 +323,12 @@ def render_dashboard() -> None:
             .rename(columns={"type": t("col_type"), "competitor": t("col_competitor"),
                              "finding": t("col_finding"), "signal_time": t("col_time")}),
             width="stretch", hide_index=True, height=320,
+        )
+        csv = df_filt[["type", "competitor", "finding", "signal_time"]].to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            t("export_csv"), data=csv,
+            file_name="signals_filtered.csv", mime="text/csv",
+            key="dash_csv_export",
         )
 
     st.divider()

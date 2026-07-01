@@ -26,7 +26,7 @@ SIGNAL_TYPE_LABELS: dict[str, str] = {
     "product_update": "产品更新",
     "pricing": "定价",
     "hiring": "招聘",
-    "gtm": "GTM",
+    "gtm": "上市策略",
     "risk": "风险",
     "ecosystem": "生态",
     "enterprise": "企业",
