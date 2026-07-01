@@ -48,9 +48,6 @@ def render_comparison() -> None:
         st.warning(t("pick_different"))
         return
 
-    if not st.button(t("compare"), type="primary"):
-        return
-
     try:
         diff = compute_diff(runs[a_idx].id, runs[b_idx].id)
     except Exception as exc:  # noqa: BLE001
@@ -71,6 +68,26 @@ def render_comparison() -> None:
         b = diff.per_company_b.get(c, 0)
         rows.append({t("col_competitor"): c, t("baseline"): a, t("current"): b, t("col_delta"): b - a})
     st.dataframe(rows, width="stretch", hide_index=True)
+
+    # Bar chart: baseline vs current
+    if rows:
+        try:
+            import pandas as pd
+            try:
+                import plotly.express as px
+                df_bar = pd.DataFrame(rows)
+                df_melt = df_bar.melt(id_vars=[t("col_competitor")],
+                                       value_vars=[t("baseline"), t("current")],
+                                       var_name=t("run_label"), value_name=t("signal_count"))
+                fig = px.bar(df_melt, x=t("col_competitor"), y=t("signal_count"),
+                             color=t("run_label"), barmode="group")
+                fig.update_layout(template="plotly_dark", height=320,
+                                  margin=dict(l=10, r=10, t=20, b=10))
+                st.plotly_chart(fig, width="stretch", key="cmp-bar")
+            except ImportError:
+                pass
+        except Exception:  # noqa: BLE001
+            pass
 
     if diff.new_claims:
         st.markdown(f"#### {t('new_claims')} ({len(diff.new_claims)})")

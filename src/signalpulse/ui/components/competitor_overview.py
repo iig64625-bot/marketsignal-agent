@@ -79,6 +79,10 @@ def render_competitor_overview() -> None:
                         )
                     else:
                         st.caption(t("overview_no_data"))
+                    if st.button(t("overview_detail"), key=f"ov-detail-{comp['name']}"):
+                        st.session_state["filter_competitor"] = comp["name"]
+                        st.session_state["active_tab"] = 0  # switch to dashboard
+                        st.rerun()
                     if comp["type_mix"]:
                         import pandas as pd
                         df = pd.DataFrame(comp["type_mix"], columns=["type", "count"])

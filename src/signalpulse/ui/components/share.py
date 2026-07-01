@@ -94,6 +94,7 @@ def render_share_panel(report_type: str) -> None:
             link = st.session_state.get(f"share_link_{report_type}", "")
             if link:
                 st.code(link, language="text")
+                st.caption(t("share_local_only"))
         with c3:
             b64 = base64.b64encode(html.encode("utf-8")).decode("ascii")
             href = f"data:text/html;base64,{b64}"

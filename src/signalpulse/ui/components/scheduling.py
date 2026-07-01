@@ -42,13 +42,28 @@ def render_scheduling() -> None:
     st.caption(t("schedule_caption"))
     st.warning(t("schedule_daemon_hint"))
 
+    _CRON_PRESETS = {
+        t("cron_daily_9"): "0 9 * * *",
+        t("cron_weekly_mon_9"): "0 9 * * 1",
+        t("cron_monthly_1st"): "0 9 1 * *",
+        t("cron_every_30min"): "*/30 * * * *",
+        t("cron_custom"): "__custom__",
+    }
+
     with st.form("schedule_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            cron = st.text_input(
-                t("schedule_cron"), value="0 9 * * 1",
-                help=t("schedule_cron_help"),
+            preset_choice = st.selectbox(
+                t("schedule_frequency"), options=list(_CRON_PRESETS.keys()),
+                index=1,
             )
+            if _CRON_PRESETS[preset_choice] == "__custom__":
+                cron = st.text_input(
+                    t("schedule_cron"), value="0 9 * * 1",
+                    help=t("schedule_cron_help"),
+                )
+            else:
+                cron = _CRON_PRESETS[preset_choice]
         with c2:
             use_sample = st.toggle(t("schedule_use_sample"), value=True)
 

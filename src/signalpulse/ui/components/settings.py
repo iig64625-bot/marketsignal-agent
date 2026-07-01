@@ -23,8 +23,9 @@ def render_settings() -> None:
 
     with c2:
         st.markdown(f"##### {t('dark_mode')}")
-        st.caption(t("settings_theme_hint"))
-        st.info(t("settings_theme_instruction"))
+        dark = st.toggle(t("dark_mode"), value=True, key="settings_dark")
+        if not dark:
+            st.caption(t("settings_light_note"))
 
     st.divider()
     st.markdown(f"##### {t('settings_about')}")

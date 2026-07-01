@@ -51,7 +51,7 @@ class HttpClient:
             await self._client.aclose()
             self._client = None
 
-    async def fetch(self, url: str) -> httpx.Response:
+    async def fetch(self, url: str, *, headers: dict[str, str] | None = None) -> httpx.Response:
         """Fetch ``url`` with retries and a soft rate limit.
 
         Honors ``Retry-After`` for 429 / 503 responses by sleeping the
@@ -63,7 +63,7 @@ class HttpClient:
         async def _do_request() -> httpx.Response:
             async with self._sem:
                 await self._pace()
-                response = await self._client.get(url)
+                response = await self._client.get(url, headers=headers)
                 if response.status_code in (429, 503):
                     # raise so the retry helper sees it as transient
                     raise httpx.HTTPStatusError(
@@ -107,8 +107,8 @@ class HttpClient:
         logger.info("429/503 Retry-After: sleeping {}s for {}", wait_s, resp.url)
         time.sleep(wait_s)
 
-    async def fetch_bytes(self, url: str) -> bytes:
-        response = await self.fetch(url)
+    async def fetch_bytes(self, url: str, *, headers: dict[str, str] | None = None) -> bytes:
+        response = await self.fetch(url, headers=headers)
         return response.content
 
     async def fetch_text(self, url: str) -> str:

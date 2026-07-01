@@ -39,7 +39,7 @@ async def analyze_signals_node(state: GraphState) -> GraphState:
             groups[ev.company_id].append(ev)
         try:
             llm = get_llm()
-            structured = llm.with_structured_output(SignalListOutput)
+            # NOTE: skip with_structured_output (DeepSeek no json_schema support)
         except ValueError as exc:
             logger.warning("analyze_signals: LLM unavailable: {}", exc)
             warnings.append(f"analyze_signals skipped: {exc}")
@@ -65,16 +65,29 @@ async def analyze_signals_node(state: GraphState) -> GraphState:
             try:
                 from signalpulse.observability.llm_tracking import invoke_with_metrics
 
-                result: SignalListOutput = await invoke_with_metrics(
+                result_msg = await invoke_with_metrics(
                     run_id=run_id,
                     node="analyze_signals_node",
-                    llm=structured,
+                    llm=llm,
                     messages=[
                         {"role": "system", "content": ANALYZE_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},
                     ],
                 )
-            except (ValidationError, ValueError, TypeError) as exc:
+                # Manual JSON parse (DeepSeek no response_format=json_schema).
+                # NOTE: use 'raw_text' (not 's') to avoid shadowing the SQLAlchemy session.
+                content = getattr(result_msg, "content", None) or str(result_msg)
+                raw_text = content.strip()
+                if raw_text.startswith("`"):
+                    raw_text = raw_text.strip("`")
+                    if raw_text.lower().startswith("json"):
+                        raw_text = raw_text[4:]
+                    raw_text = raw_text.strip()
+                data = json.loads(raw_text)
+                if isinstance(data, list):
+                    data = {'signals': data}
+                result = SignalListOutput.model_validate(data)
+            except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as exc:
                 warnings.append(f"signal parse failed for {company_name}: {exc}")
                 continue
             except Exception as exc:  # noqa: BLE001
@@ -129,5 +142,5 @@ def _build_prompt(company: str, events: list[Event], *, truncated: bool = False)
         lines.append(
             f"- id={e.id} type={e.event_type} title={title} summary={summary}"
         )
-    lines.append("Return the JSON list of signals.")
+    lines.append("Return a JSON object whose top-level 'signals' field contains the list of signals (e.g. {'signals': [...]}). The wrapper object is required.")
     return "\n".join(lines)

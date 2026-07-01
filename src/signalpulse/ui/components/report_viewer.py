@@ -213,7 +213,7 @@ def render_signal_timeline(reports: Iterable[Report] = ()) -> None:
         {"created": r.created_at, "type": r.report_type, "title": r.title or t("no_title")}
         for r in items
     ]
-    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.dataframe(rows, width="stretch", hide_index=True)
 
     try:
         trend = _trend_rows(limit=20)

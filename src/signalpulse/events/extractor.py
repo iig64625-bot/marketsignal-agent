@@ -1,4 +1,4 @@
-﻿"""Structured event extraction from normalized documents."""
+"""Structured event extraction from normalized documents."""
 from __future__ import annotations
 
 import json
@@ -24,7 +24,7 @@ GitHub release, user feedback, partnership, announcement). For each event return
 - evidence_spans (verbatim source phrases that support the event)
 
 If no events are present, return an empty list. Do not fabricate information. Always respond
-with JSON matching the requested schema."""
+with a JSON object whose top-level "events" field contains the list of events (e.g. `{"events": [...]}`). The wrapper object is required."""
 
 
 def _build_user_prompt(doc: NormalizedDocument) -> str:
@@ -67,19 +67,29 @@ async def extract_events(
     except ValueError as exc:
         logger.warning("LLM not configured, skipping event extraction: {}", exc)
         return []
-    structured = llm.with_structured_output(EventListOutput)
+    # NOTE: skip with_structured_output — DeepSeek does not support
+    # ``response_format: json_schema`` (returns 400 "unavailable now").
+    # Use plain LLM call + manual JSON parsing via the existing _parse_json helper.
     try:
         from signalpulse.observability.llm_tracking import invoke_with_metrics
 
-        result: EventListOutput = await invoke_with_metrics(
+        result_msg = await invoke_with_metrics(
             run_id=run_id,
             node=node,
-            llm=structured,
+            llm=llm,
             messages=[
                 {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(doc)},
             ],
         )
+        # AIMessage.content is a JSON string (system prompt asks for JSON).
+        # _parse_json strips ```json ... ``` fences if the LLM adds them.
+        content = getattr(result_msg, "content", None) or str(result_msg)
+        data = _parse_json(content)
+        # Tolerate LLMs that return a bare list instead of {"events": [...]}.
+        if isinstance(data, list):
+            data = {"events": data}
+        result = EventListOutput.model_validate(data)
     except (ValidationError, ValueError, TypeError) as exc:
         logger.warning("LLM returned invalid output: {}", exc)
         return []

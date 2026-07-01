@@ -1,52 +1,56 @@
-﻿# SignalPulse — AI Agent 竞品配置
+# SignalPulse — AI Agent 竞品配置
 # 用途: 跟踪 AI Agent / Copilot 类产品（Coze / Dify / Manus / Lindy 等）
-# 最后更新: V5
+# 最后更新: V6 (loader schema: target_company + competitors[] + monitoring_dimensions + run_options)
 
-companies:
+target_company:
+  name: "Coze"
+  website: "https://www.coze.com"
+  description: "字节跳动出品，海外版 coze.com，国内版 coze.cn"
+
+competitors:
   - name: "Coze"
-    ticker: "coze"
-    homepage: "https://www.coze.com"
-    category: "ai-agent"
-    watch: true
-    notes: "字节跳动出品，海外版 coze.com，国内版 coze.cn"
+    website: "https://www.coze.com"
+    description: "字节跳动出品，海外版 coze.com，国内版 coze.cn"
+    sources: []
   - name: "Dify"
-    ticker: "dify"
-    homepage: "https://dify.ai"
-    category: "ai-agent"
-    watch: true
-    notes: "开源 LLM 应用平台，BaaS 模式"
+    website: "https://dify.ai"
+    description: "开源 LLM 应用平台，BaaS 模式"
+    sources:
+      - type: "github"
+        url: "https://github.com/langgenius/dify"
   - name: "Manus"
-    ticker: "manus"
-    homepage: "https://manus.im"
-    category: "ai-agent"
-    watch: true
-    notes: "通用 AI Agent，2025 年 3 月发布"
+    website: "https://manus.im"
+    description: "通用 AI Agent，2025 年 3 月发布"
+    sources:
+      - type: "blog"
+        url: "https://manus.im/news"
   - name: "Lindy"
-    ticker: "lindy"
-    homepage: "https://www.lindy.ai"
-    category: "ai-agent"
-    watch: false
-    notes: "AI 助手平台，定位个人/团队自动化"
+    website: "https://www.lindy.ai"
+    description: "AI 助手平台，定位个人/团队自动化"
+    sources: []
   - name: "FastGPT"
-    ticker: "fastgpt"
-    homepage: "https://fastgpt.in"
-    category: "ai-agent"
-    watch: true
-    notes: "开源知识库 RAG 平台"
+    website: "https://fastgpt.in"
+    description: "开源知识库 RAG 平台"
+    sources:
+      - type: "github"
+        url: "https://github.com/labring/FastGPT"
 
-sources:
-  - type: "rss"
-    url: "https://www.coze.com/blog/rss.xml"
-    enabled: false
-  - type: "rss"
-    url: "https://dify.ai/blog/rss.xml"
-    enabled: false
-  - type: "web"
-    url: "https://manus.im/news"
-    enabled: true
-    selector: "article.post"
+monitoring_dimensions:
+  - "product"
+  - "product_update"
+  - "pricing"
+  - "hiring"
+  - "gtm"
+  - "ecosystem"
+  - "enterprise"
+  - "community"
+  - "user_feedback"
+  - "github_release"
+  - "risk"
 
-schedule:
-  cron: "0 8 * * *"
-  timezone: "Asia/Shanghai"
-  enabled: false
+run_options:
+  time_window_days: 7
+  use_sample_dataset: false
+  generate_weekly_report: true
+  generate_battlecards: true
+  run_evals: true

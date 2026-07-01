@@ -1,8 +1,9 @@
-﻿"""GitHub releases fetcher."""
+"""GitHub releases fetcher."""
 from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import re
 from pathlib import Path
 
@@ -44,7 +45,20 @@ async def fetch_github_releases(
         await client.__aenter__()
     try:
         api_url = f"https://api.github.com/repos/{owner}/{repo}/releases?per_page={max_releases}"
-        body = await client.fetch_bytes(api_url)
+        # GitHub auth: read token from env or .env (5000/hr vs 60/hr unauthed)
+        extra_headers: dict[str, str] = {}
+        gh_token = os.environ.get("GITHUB_TOKEN", "").strip()
+        if not gh_token:
+            env_path = Path(__file__).parent.parent.parent.parent / ".env"
+            if env_path.exists():
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    if line.strip().startswith("GITHUB_TOKEN="):
+                        gh_token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+        if gh_token:
+            extra_headers["Authorization"] = f"token {gh_token}"
+            extra_headers["Accept"] = "application/vnd.github+json"
+        body = await client.fetch_bytes(api_url, headers=extra_headers or None)
         if raw_root is None:
             raw_root = Path.cwd()
         target = _raw_dir(raw_root, crawl_run_id) / f"{source_id}_{int(_dt.datetime.now(_dt.timezone.utc).timestamp() * 1000)}.json"
