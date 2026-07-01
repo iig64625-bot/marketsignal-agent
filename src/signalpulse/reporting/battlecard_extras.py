@@ -30,7 +30,7 @@ def _build_prompt(target_company: str, competitor: str, signals: list[Signal]) -
             lines.append(f"  分析：{s.analysis}")
         if s.recommendation:
             lines.append(f"  建议：{s.recommendation}")
-    lines.append("请按 BattlecardExtras 字段返回 JSON。")
+    lines.append("请按以下 JSON 字段返回一个扁平对象：sales_pitch (字符串), attack_points (3-5 个对象，每个含 weakness/evidence/confidence 浮点数), talk_tracks (3-5 个对象，每个含 situation/line/confidence 浮点数), summary (字符串)。注意：所有 confidence 字段必须是 0.0 到 1.0 之间的浮点数（如 0.75），不允许传字符串。不要包装在额外字段中。")
     return "\n".join(lines)
 
 
@@ -63,19 +63,33 @@ async def generate_battlecard_extras(
         return fallback
     from signalpulse.models.schemas import BattlecardExtras  # local to avoid cycles
 
-    structured = llm.with_structured_output(BattlecardExtras)
+    # NOTE: skip with_structured_output (DeepSeek no json_schema support)
     try:
         from signalpulse.observability.llm_tracking import invoke_with_metrics
 
-        result: BattlecardExtras = await invoke_with_metrics(
+        result_msg = await invoke_with_metrics(
             run_id=run_id,
             node=node,
-            llm=structured,
+            llm=llm,
             messages=[
                 {"role": "system", "content": _BATTLE_PROMPT},
                 {"role": "user", "content": _build_prompt(target_company, competitor, signals)},
             ],
         )
+        # Manual JSON parse (DeepSeek no response_format=json_schema).
+        import json as _json
+        content = getattr(result_msg, "content", None) or str(result_msg)
+        raw_text = content.strip()
+        if raw_text.startswith("`"):
+            raw_text = raw_text.strip("`")
+            if raw_text.lower().startswith("json"):
+                raw_text = raw_text[4:]
+            raw_text = raw_text.strip()
+        data = _json.loads(raw_text)
+        # Tolerate LLMs that wrap the response in {"battlecard_extras": {...}}
+        if isinstance(data, dict) and "battlecard_extras" in data and isinstance(data["battlecard_extras"], dict):
+            data = data["battlecard_extras"]
+        result = BattlecardExtras.model_validate(data)
         return {
             "sales_pitch": result.sales_pitch,
             "attack_points": [ap.model_dump() for ap in result.attack_points],

@@ -37,7 +37,7 @@ async def generate_battlecards_node(state: GraphState) -> GraphState:
                 extras = await generate_battlecard_extras(
                     target, company.name, sigs, run_id=run_id, node="generate_battlecards_node"
                 )
-                markdown = render_battlecard(company.name, sigs, target_name=target, extras=extras)
+                markdown = render_battlecard(sigs, company_name=company.name, target_name=target, extras=extras)
             except (ValueError, TypeError):
                 markdown = f"# Battlecard: {company.name}\n\n_(render error)_"
             path = out_dir / f"battlecard_{company.name}_{run_id}.md"
