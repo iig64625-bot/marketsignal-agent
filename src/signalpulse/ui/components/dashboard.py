@@ -293,7 +293,7 @@ def render_dashboard() -> None:
     with fc3:
         type_opts = ["__all__"] + sorted(all_types)
         sel_type = st.selectbox(t("signal_type_filter"), type_opts,
-                                format_func=lambda x: t("all_types") if x == "__all__" else label_signal_type(x),
+                                format_func=lambda x: t("all_types") if x == "__all__" else {"product":"产品","pricing":"定价","hiring":"招聘","gtm":"上市策略","risk":"风险","ecosystem":"生态","enterprise":"企业","community":"社区","user_feedback":"用户反馈","product_update":"产品更新","github_release":"GitHub 发布"}.get(x, x),
                                 index=0, key="dash_type")
     with fc4:
         comp_opts = ["__all__"] + sorted(all_companies)
