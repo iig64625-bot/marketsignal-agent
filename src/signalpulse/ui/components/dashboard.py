@@ -179,8 +179,10 @@ def render_dashboard() -> None:
 
     if runs:
         last = runs[0]
-        last_status = last.status or "?"
-        status_emoji = {"completed": "✅", "failed": "❌", "running": "⏳", "pending": "🔘"}.get(last_status, "❓")
+        _raw_status = last.status or "?"
+        _STATUS_LABELS = {"completed": "已完成", "failed": "失败", "running": "运行中", "pending": "等待中", "?": "未知"}
+        last_status = _STATUS_LABELS.get(_raw_status, _raw_status)
+        status_emoji = {"completed": "✅", "failed": "❌", "running": "⏳", "pending": "🔘"}.get(_raw_status, "❓")
         delta_str = ""
         if len(runs) >= 2 and runs[0].started_at and runs[1].started_at:
             delta = (runs[0].started_at - runs[1].started_at).total_seconds() / 3600
@@ -292,12 +294,11 @@ def render_dashboard() -> None:
                                    index=0, key="dash_time")
     with fc3:
         _TL = {"product":"产品","product_update":"产品更新","pricing":"定价","hiring":"招聘","gtm":"上市策略","risk":"风险","ecosystem":"生态","enterprise":"企业","community":"社区","user_feedback":"用户反馈","github_release":"GitHub 发布"}
-        _keys = sorted(all_types)
-        _labels = ["全部类型"] + [_TL.get(k, k) for k in _keys]
-        _internal = ["__all__"] + _keys
-        _idx = _internal.index(sel_type) if "sel_type" in dir() and sel_type in _internal else 0
-        _picked = st.radio(t("signal_type_filter"), _labels, index=_idx, key="dash_type_radio", horizontal=True)
-        sel_type = "__all__" if _picked == "全部类型" else _internal[_labels.index(_picked)]
+        type_opts = ["__all__"] + sorted(all_types)
+        sel_type = st.selectbox(t("signal_type_filter"), type_opts,
+                                format_func=lambda x: t("all_types") if x == "__all__" else _TL.get(x, x),
+                                index=type_opts.index(sel_type) if "sel_type" in dir() and sel_type in type_opts else 0,
+                                key="dash_type")
     with fc4:
         comp_opts = ["__all__"] + sorted(all_companies)
         # Pre-select competitor from overview card click
